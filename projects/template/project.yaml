@@ -1,0 +1,86 @@
+# =============================================================================
+# TAOS Project Configuration
+# =============================================================================
+# Copy this file into your project directory and fill in the fields marked
+# REQUIRED. Everything else can be left blank to inherit the machine default
+# from taos/machines.yaml.
+#
+# Override rule: a blank value ("") defers to the machine default. Set a
+# non-blank value here only when you need project-specific behavior.
+#
+# Usage:
+#   python show_config.py            # print all resolved values
+#   python check_paths.py            # check which paths exist on disk
+# =============================================================================
+
+# --- Project identity --------------------------------------------------------
+
+project:
+  name:      "2026-workflow-test"
+  timestamp: "20260403"
+
+# --- Grid configuration ------------------------------------------------------
+
+grid:
+  name: ""               # set per-grid in grids: list below
+
+  # Component grids — shared across all grids unless overridden in grids: list
+  ocn_name: ""
+  ocn_file: ""
+  lnd_name: ""
+  lnd_file: ""
+
+  # SPA grid — optional, only needed for EAMxx SPA maps (defaults to <name>pg2)
+  spa_name: ""
+  spa_file: ""
+
+  # Set to true to use homme_tool grid_template_tool + HOMME2SCRIP.py for np4
+  # SCRIP generation instead of the default pure-Python path.
+  # Requires paths.homme_tool_root to be set.
+  homme_np4_scrip: false
+
+grids:
+  - name: "ne30"
+  - name: "ne45"
+
+# --- Machine override (optional) ---------------------------------------------
+# Set name only if auto-detection fails or you need to force a specific machine.
+# Auto-detection probes known HPC paths; valid values: NERSC, LCRC, ALCF, OLCF.
+
+machine:
+  name: ""
+
+# --- Path overrides (optional) -----------------------------------------------
+# All values below default to "" (use machine default from taos/machines.yaml).
+
+paths:
+  grid_code_root:  ""
+  grid_data_root:  ""
+  e3sm_src_root:   ""
+  DIN_LOC_ROOT:    ""
+  unified_bin:     ""
+  unified_src:     ""
+  homme_tool_root: ""
+  mbda_path:       ""
+  topo_file_src:   ""
+
+# --- Topo options (optional) -------------------------------------------------
+
+topo:
+  # Set to false to use the original homme_tool topo_pgn_to_smoothed instead of
+  # the Python SEM smoother. Requires paths.homme_tool_root to be set.
+  use_python_smooth: true
+  # Set to true to force the pure-Python disk-averaged remap even when
+  # paths.mbda_path is set. Useful for quick login-node tests. The Python
+  # fallback is automatically used when paths.mbda_path is empty. Note: the
+  # 3km intermediate file still requires the compiled MBDA binary.
+  use_python_mbda: false
+
+# --- SLURM overrides (optional) ----------------------------------------------
+
+slurm:
+  mail_user:  ""
+  mail_type:  ""
+  account:    ""
+  constraint: ""
+  qos:        ""

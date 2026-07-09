@@ -1,0 +1,1 @@
+../../taos/check_paths.py
