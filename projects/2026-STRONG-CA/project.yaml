@@ -38,12 +38,14 @@ grid:
   homme_np4_scrip:  false
 
 grids:
+
   # ne32 base w/ 5x refinement => dx-pg2 ~ 4-175 km
   - name: "STRONG-CA-32x5-v1"
     # grid_file_exodus: ${grid_root}/STRONG-CA-32x5-v1.g
   - name: "STRONG-CA-32x5-v2"
     # grid_file_exodus: ${grid_root}/STRONG-CA-32x5-v2.g
-  # ne128 base w/ 3x refinement => dx-pg2 ~ 4-44 km
+
+  # # ne128 base w/ 3x refinement => dx-pg2 ~ 4-44 km
   # - name: "STRONG-CA-128x3-v1"
   #   grid_file_exodus: ${grid_root}/STRONG-CA-128x3-v1.g
   # - name: "STRONG-CA-128x3-v2"
@@ -87,6 +89,7 @@ machines:
   # OLCF:
   #   paths:
   #     grid_data_root: "/lustre/orion/cli115/proj-shared/$USER/TAOS"
+  #     topo_file_src:   "/lustre/orion/cli115/proj-shared/hannah6/TAOS/high-res-topo/GMTED2010_7.5_stitch_S5P_OPER_REF_DEM_15_NCL_24-3.r172800x86400.nc"
   #   slurm:
   #     account: "cli115"
 
@@ -95,7 +98,7 @@ machines:
 topo:
   # Set to false to use the original homme_tool topo_pgn_to_smoothed instead of
   # the Python SEM smoother. Requires paths.homme_tool_root to be set.
-  use_python_smooth: false
+  use_python_smooth: true
   # Set to true to force the pure-Python disk-averaged remap even when
   # paths.mbda_path is set. Useful for quick login-node tests. The Python
   # fallback is automatically used when paths.mbda_path is empty. Note: the
