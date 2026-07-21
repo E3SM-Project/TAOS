@@ -34,11 +34,11 @@ slurm_qos        = cfg.get('slurm.qos', 'regular')
 #-------------------------------------------------------------------------------
 # step flags — set to False (or comment out) to skip a step
 
-use_batch = False  # set False to run steps directly on the current node
+use_batch = True  # set False to run steps directly on the current node
 
 # do_grid   = True
-# do_maps   = True
-do_domain = True
+do_maps   = True
+# do_domain = True
 # do_topo   = True
 
 
@@ -123,7 +123,7 @@ for grid_cfg in cfg.iter_grids():
         if locals().get('do_maps', False):
             map_args = ''
             map_args += ' --create-maps-ocn'
-            map_args += ' --create-maps-lnd'
+            # map_args += ' --create-maps-lnd'
             cmd += f'python -m taos.maps {yaml_path} --grid-name {grid_name} {map_args}'
         if locals().get('do_domain', False):
             if cmd: cmd += ' && '
