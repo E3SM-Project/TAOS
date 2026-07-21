@@ -38,10 +38,16 @@ grid:
   homme_np4_scrip:  true
 
 grids:
+  # ne32 base w/ 5x refinement => dx-pg2 ~ 4-175 km
   - name: "STRONG-CA-32x5-v1"
-    grid_file_exodus: /global/cfs/cdirs/m5277/whannah/2026-STRONG-CA/files_grid/STRONG-CA-32x5-v1.g
-  # - name: "STRONG-CA-32x5-v2"
-  #   grid_file_exodus: /global/cfs/cdirs/m5277/whannah/2026-STRONG-CA/files_grid/STRONG-CA-32x5-v2.g
+    grid_file_exodus: ${grid_root}/STRONG-CA-32x5-v1.g
+  - name: "STRONG-CA-32x5-v2"
+    grid_file_exodus: ${grid_root}/STRONG-CA-32x5-v2.g
+  # ne128 base w/ 3x refinement => dx-pg2 ~ 4-44 km
+  - name: "STRONG-CA-128x3-v1"
+    grid_file_exodus: ${grid_root}/STRONG-CA-128x3-v1.g
+  - name: "STRONG-CA-128x3-v2"
+    grid_file_exodus: ${grid_root}/STRONG-CA-128x3-v2.g
 
 # --- Machine override (optional) ---------------------------------------------
 # Set name only if auto-detection fails or you need to force a specific machine.

@@ -38,7 +38,7 @@ do_topo   = True
 # or list specific grid names to process a subset
 
 active_grids = None
-# active_grids = ['ne30']
+active_grids = ['STRONG-CA-32x5-v2']
 
 #-------------------------------------------------------------------------------
 # submit one set of jobs per grid
