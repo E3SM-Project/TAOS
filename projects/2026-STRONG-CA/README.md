@@ -7,14 +7,14 @@ This project is focused on using "ensemble boosting" to simulate extreme heatwav
 
 # Grid Creation Notes
 
-The RRM grid is created by first generating a PNG file with `generate_refinement_image.py` that shades the state of california and builds buffer zone around it.
+The RRM grid is created by first generating a PNG file with `generate_refinement_image.py` that shades the state of california and builds buffer zone around it. The `plot.grid.py` script can then be used to visual one of more grids for comparison. Both scripts should be reviewed and modified before running.
 
 The general grid generation workflow is as follows:
 
 ```shell
 python generate_refinement_image.py
 # < SQuadGen commands >
-python ../../code_grid_plot/plot.grid.py
+python plot.grid.py
 ```
 
 The details of the SQuadGen commands and some variations are described next.

@@ -25,15 +25,10 @@ class tclr: END,RED,GRN,MGN,CYN,YLW = '\033[0m','\033[31m','\033[32m','\033[35m'
 # --------------------------------------------------------------------------------------------------
 # User configuration — edit this section
 # --------------------------------------------------------------------------------------------------
-home = os.getenv('HOME')
-
 grids = []
-
 def add_grid(file, name, clat=0, clon=0, topo_file=None, markers=None):
     """
     Register a SCRIP grid for plotting.
-
-    Parameters
     ----------
     file       : str   — path to SCRIP .nc grid file
     name       : str   — label shown in the subplot title
@@ -45,20 +40,19 @@ def add_grid(file, name, clat=0, clon=0, topo_file=None, markers=None):
                       topo_file=topo_file, markers=markers or []))
 # ------------------------------------------------------------------------------
 # Output path
-fig_file = 'figs/grid.png'
+fig_file = 'grid.png'
 # ------------------------------------------------------------------------------
 # Add grids here
-grid_root = '/global/cfs/cdirs/m4310/whannah/files_grid'
+grid_root = '/global/cfs/cdirs/e3sm/whannah/files_grid'
 topo_root = '/global/cfs/cdirs/e3sm/inputdata/atm/cam/topo'
-# add_grid(f'{grid_root}/ne30pg2_scrip.nc',  'ne30',  clat=38, clon=-120)#, topo_file=f'{topo_root}/USGS-topo_ne30np4_smoothedx6t_20250513.nc')
-# add_grid(f'{grid_root}/scrip_ne120pg2.nc', 'ne120', clat=38, clon=-120)#, topo_file=f'{topo_root}/USGS-gtopo30_ne120np4pg2_x6t_20230404.nc')
+# add_grid(f'{grid_root}/ne256pg2_scrip.nc',  'ne256',  clat=38, clon=-120, topo_file=f'{topo_root}/USGS-gtopo30_ne256np4pg2_x6t-SGH.nc')
 
 grid_root = '/global/cfs/cdirs/m5277/whannah/2026-STRONG-CA/files_grid'
-add_grid(f'{grid_root}/STRONG-CA-32x5-v1-pg2_scrip.nc', 'CA-32x5 v1', clat=38, clon=-130)
-add_grid(f'{grid_root}/STRONG-CA-32x5-v2-pg2_scrip.nc', 'CA-32x5 v2', clat=38, clon=-130)
-
-# add_grid(f'{grid_root}/STRONG-CA-128x3-v1-pg2_scrip.nc', 'CA-128x3 v1', clat=38, clon=-120)
-# add_grid(f'{grid_root}/STRONG-CA-128x3-v2-pg2_scrip.nc', 'CA-128x3 v2', clat=38, clon=-120)
+topo_root = '/global/cfs/cdirs/m5277/whannah/2026-STRONG-CA/files_topo'
+# add_grid(f'{grid_root}/STRONG-CA-32x5-v1-pg2_scrip.nc',  name='CA-32x5-v1',  clat=38, clon=-120, topo_file=None)#f'{topo_root}/????')
+add_grid(f'{grid_root}/STRONG-CA-32x5-v2-pg2_scrip.nc',  name='CA-32x5-v2',  clat=38, clon=-120, topo_file=None)#f'{topo_root}/????')
+# add_grid(f'{grid_root}/STRONG-CA-128x3-v1-pg2_scrip.nc', name='CA-128x3-v1',  clat=38, clon=-120, topo_file=None)#f'{topo_root}/????')
+# add_grid(f'{grid_root}/STRONG-CA-128x3-v2-pg2_scrip.nc', name='CA-128x3-v2',  clat=38, clon=-120, topo_file=None)#f'{topo_root}/????')
 
 # ------------------------------------------------------------------------------
 # Shade mode: 'area', 'topo', or 'lines'
@@ -78,7 +72,7 @@ half_w = 50
 half_h = 30
 
 # Panel layout and figure size [inches per panel]
-num_plot_col = 2#len(grids)
+num_plot_col = 1#len(grids)
 panel_w      = 5.5
 panel_h      = 5.5
 
@@ -283,7 +277,7 @@ for idx, g in enumerate(grids):
 # --------------------------------------------------------------------------------------------------
 # Save figure
 # --------------------------------------------------------------------------------------------------
-os.makedirs(os.path.dirname(fig_file), exist_ok=True)
+os.makedirs(os.path.dirname(fig_file) or '.', exist_ok=True)
 fig.tight_layout()
 fig.savefig(fig_file, dpi=200, bbox_inches='tight')
 print(f'\n{fig_file}\n')
