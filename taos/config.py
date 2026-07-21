@@ -119,17 +119,11 @@ class taos_config:
         self.slurm  = _expand(self._merge_section('slurm'))
 
         # Project and grid sections come directly from the project YAML.
-        # Grid values may reference path vars like ${DIN_LOC_ROOT} that are
-        # not in the system env, so temporarily inject self.paths for expansion.
+        # Grid values may reference path vars like ${DIN_LOC_ROOT} or derived
+        # keys like ${grid_root}, which are not in the system env — see
+        # _expand_grid_vars for the temporary-injection expansion.
         self.project = dict(self._raw.get('project', {}))
-        _saved = {k: os.environ[k] for k in self.paths if k in os.environ}
-        os.environ.update({k: v for k, v in self.paths.items() if v})
-        self.grid = _expand(dict(self._raw.get('grid', {})))
-        for k in self.paths:
-            if k in _saved:
-                os.environ[k] = _saved[k]
-            else:
-                os.environ.pop(k, None)
+        self.grid = self._expand_grid_vars(dict(self._raw.get('grid', {})))
 
         # Apply per-user path/slurm overrides from users: section
         _current_user = os.environ.get('USER', '')
@@ -157,6 +151,10 @@ class taos_config:
         # Compute derived paths (mirrors set_project_paths.sh)
         self.derived = self._compute_derived()
 
+        # Re-expand the base grid section now that derived keys (e.g.
+        # ${grid_root}) are available, so grid values may reference them too.
+        self.grid = self._expand_grid_vars(self.grid)
+
     # ------------------------------------------------------------------
     # Alternate constructors
     # ------------------------------------------------------------------
@@ -168,6 +166,34 @@ class taos_config:
     @classmethod
     def from_project_dir(cls, project_dir) -> 'taos_config':
         return cls(Path(project_dir) / 'project.yaml')
+
+    # ------------------------------------------------------------------
+    # Config-var expansion
+    # ------------------------------------------------------------------
+
+    def _expand_grid_vars(self, obj):
+        """Expand ``$ENV_VAR``, ``~``, and TAOS config vars in *obj*.
+
+        In addition to real environment variables, this resolves path keys
+        (``self.paths``, e.g. ``${DIN_LOC_ROOT}``) and derived keys
+        (``self.derived``, e.g. ``${grid_root}``) by temporarily injecting
+        them into the environment for the duration of the expansion. Derived
+        keys are only available after ``self.derived`` is populated; before
+        then only path keys are injected.
+        """
+        extra = {}
+        extra.update({k: v for k, v in self.paths.items() if v})
+        extra.update({k: v for k, v in getattr(self, 'derived', {}).items() if v})
+        _saved = {k: os.environ.get(k) for k in extra}
+        os.environ.update(extra)
+        try:
+            return _expand(obj)
+        finally:
+            for k, old in _saved.items():
+                if old is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = old
 
     # ------------------------------------------------------------------
     # Multi-grid iteration
@@ -187,26 +213,16 @@ class taos_config:
             yield self
             return
         # Grid entries may reference path vars like ${grid_data_root} or
-        # derived roots like ${grid_root}; inject them for expansion, mirroring
-        # how __init__ expands the base grid: section.
-        subst = {k: v for k, v in {**self.paths, **self.derived}.items() if v}
-        _saved = {k: os.environ[k] for k in subst if k in os.environ}
-        os.environ.update(subst)
-        try:
-            for entry in raw_grids:
-                merged = dict(self.grid)
-                for k, v in _expand(entry or {}).items():
-                    if not _is_blank(v):
-                        merged[k] = v
-                variant = copy.copy(self)
-                variant.grid = merged
-                yield variant
-        finally:
-            for k in subst:
-                if k in _saved:
-                    os.environ[k] = _saved[k]
-                else:
-                    os.environ.pop(k, None)
+        # derived roots like ${grid_root}; _expand_grid_vars injects them for
+        # expansion, mirroring how __init__ expands the base grid: section.
+        for entry in raw_grids:
+            merged = dict(self.grid)
+            for k, v in self._expand_grid_vars(entry or {}).items():
+                if not _is_blank(v):
+                    merged[k] = v
+            variant = copy.copy(self)
+            variant.grid = merged
+            yield variant
 
     def for_grid(self, name: str) -> 'taos_config':
         """Return the config variant whose grid.name matches *name*.
