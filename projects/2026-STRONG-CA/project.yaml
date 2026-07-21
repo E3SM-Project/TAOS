@@ -39,6 +39,10 @@ grid:
 
 grids:
 
+  # grid version notes:
+  #   v1 - inner refinement follows CA coastline - include wide intermediate resolution buffer
+  #   v2 - same as v1 but w/o the buffer
+
   # ne32 base w/ 5x refinement => dx-pg2 ~ 4-175 km
   - name: "STRONG-CA-32x5-v1"
     # grid_file_exodus: ${grid_root}/STRONG-CA-32x5-v1.g
