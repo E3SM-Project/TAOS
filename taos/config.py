@@ -247,6 +247,7 @@ class taos_config:
             'derived': self.derived,
             'machine': {'name': self.machine},
             'topo':    self._raw.get('topo', {}),
+            'maps':    self._raw.get('maps', {}),
         }
         if section not in store:
             return None
