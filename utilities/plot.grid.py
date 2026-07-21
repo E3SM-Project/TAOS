@@ -25,10 +25,7 @@ class tclr: END,RED,GRN,MGN,CYN,YLW = '\033[0m','\033[31m','\033[32m','\033[35m'
 # --------------------------------------------------------------------------------------------------
 # User configuration — edit this section
 # --------------------------------------------------------------------------------------------------
-home = os.getenv('HOME')
-
 grids = []
-
 def add_grid(file, name, clat=0, clon=0, topo_file=None, markers=None):
     """
     Register a SCRIP grid for plotting.
@@ -273,7 +270,7 @@ for idx, g in enumerate(grids):
 # --------------------------------------------------------------------------------------------------
 # Save figure
 # --------------------------------------------------------------------------------------------------
-os.makedirs(os.path.dirname(fig_file), exist_ok=True)
+os.makedirs(os.path.dirname(fig_file) or '.', exist_ok=True)
 fig.tight_layout()
 fig.savefig(fig_file, dpi=200, bbox_inches='tight')
 print(f'\n{fig_file}\n')
