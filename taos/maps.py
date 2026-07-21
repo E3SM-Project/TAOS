@@ -23,7 +23,27 @@ from taos.config import taos_config
 from taos.util import clr, print_line, run_cmd, timer
 
 # -------------------------------------------------------------------
+# default remap algorithms (overridable via maps.algorithms in project.yaml
+# or the --algorithms command-line argument)
+_DEFAULT_ALGORITHMS = ['traave', 'trbilin', 'trfv2', 'trintbilin']
+
+# -------------------------------------------------------------------
 # internal helpers
+
+
+def _resolve_algorithms(cfg, override=None):
+    """Return the list of remap algorithms to use.
+
+    Precedence: explicit override (e.g. CLI arg) > maps.algorithms in
+    project.yaml > the built-in default list.  Accepts either a YAML list
+    or a comma-separated string.
+    """
+    value = override if override is not None else cfg.get('maps.algorithms')
+    if value is None:
+        return list(_DEFAULT_ALGORITHMS)
+    if isinstance(value, str):
+        value = [v.strip() for v in value.split(',') if v.strip()]
+    return list(value)
 
 
 def _unified_env_prefix(cfg):
@@ -54,15 +74,18 @@ def _ncremap_pair(env_prefix, alg, src_file, dst_file, map_file, a2o=False):
 # public API
 
 
-def create_maps_ocn(cfg):
+def create_maps_ocn(cfg, algorithms=None):
     """
     Create atmosphere↔ocean coupling maps with TempestRemap.
 
-    Generates eight map files (four algorithms, both directions).
+    Generates two map files (both directions) per algorithm.
 
     Parameters
     ----------
     cfg : taos_config
+    algorithms : list of str, optional
+        Remap algorithms to use.  Defaults to maps.algorithms from
+        project.yaml, or the built-in list if unset.
     """
     grid_name     = cfg['grid.name']
     atm_grid_name = cfg.get('grid.name_pg2', grid_name + 'pg2')
@@ -77,7 +100,7 @@ def create_maps_ocn(cfg):
         print_line()
         print(f'\n  {clr.GREEN}Creating ocean map files with TempestRemap{clr.END}')
 
-        algorithms = ['traave', 'trbilin', 'trfv2', 'trintbilin']
+        algorithms = _resolve_algorithms(cfg, algorithms)
         for alg in algorithms:
             map_file = f'{maps_root}/map_{ocn_grid_name}_to_{atm_grid_name}_{alg}.{timestamp}.nc'
             _ncremap_pair(env_prefix, alg, ocn_grid_file, atm_grid_file, map_file)
@@ -87,15 +110,18 @@ def create_maps_ocn(cfg):
         print(f'\n  {clr.GREEN}Ocean map file creation SUCCESSFUL{clr.END}')
 
 
-def create_maps_lnd(cfg):
+def create_maps_lnd(cfg, algorithms=None):
     """
     Create atmosphere↔land coupling maps with TempestRemap.
 
-    Generates eight map files (four algorithms, both directions).
+    Generates two map files (both directions) per algorithm.
 
     Parameters
     ----------
     cfg : taos_config
+    algorithms : list of str, optional
+        Remap algorithms to use.  Defaults to maps.algorithms from
+        project.yaml, or the built-in list if unset.
     """
     grid_name     = cfg['grid.name']
     atm_grid_name = cfg.get('grid.name_pg2', grid_name + 'pg2')
@@ -110,7 +136,7 @@ def create_maps_lnd(cfg):
         print_line()
         print(f'\n  {clr.GREEN}Creating land map files with TempestRemap{clr.END}')
 
-        algorithms = ['traave', 'trbilin', 'trfv2', 'trintbilin']
+        algorithms = _resolve_algorithms(cfg, algorithms)
         for alg in algorithms:
             map_file = f'{maps_root}/map_{lnd_grid_name}_to_{atm_grid_name}_{alg}.{timestamp}.nc'
             _ncremap_pair(env_prefix, alg, lnd_grid_file, atm_grid_file, map_file)
@@ -158,6 +184,10 @@ if __name__ == '__main__':
     parser.add_argument('--create-maps-spa', action='store_true', help='Create SPA map (EAMxx)')
     parser.add_argument('--grid-name', default=None,
                         help='Grid name to process (selects from grids: list; default: base grid:)')
+    parser.add_argument('--algorithms', default=None,
+                        help='Comma-separated remap algorithms for ocn/lnd maps '
+                             '(overrides maps.algorithms in project.yaml; '
+                             f'default: {",".join(_DEFAULT_ALGORITHMS)})')
     args = parser.parse_args()
 
     cfg = taos_config(args.project_yaml)
@@ -165,11 +195,13 @@ if __name__ == '__main__':
         cfg = cfg.for_grid(args.grid_name)
     cfg.validate()
 
+    algorithms = _resolve_algorithms(cfg, args.algorithms) if args.algorithms else None
+
     timer.start_total()
     if args.create_maps_ocn:
-        create_maps_ocn(cfg)
+        create_maps_ocn(cfg, algorithms=algorithms)
     if args.create_maps_lnd:
-        create_maps_lnd(cfg)
+        create_maps_lnd(cfg, algorithms=algorithms)
     if args.create_maps_spa:
         create_maps_spa(cfg)
     timer.summary()

@@ -186,14 +186,27 @@ class taos_config:
         if not raw_grids:
             yield self
             return
-        for entry in raw_grids:
-            merged = dict(self.grid)
-            for k, v in _expand(entry or {}).items():
-                if not _is_blank(v):
-                    merged[k] = v
-            variant = copy.copy(self)
-            variant.grid = merged
-            yield variant
+        # Grid entries may reference path vars like ${grid_data_root} or
+        # derived roots like ${grid_root}; inject them for expansion, mirroring
+        # how __init__ expands the base grid: section.
+        subst = {k: v for k, v in {**self.paths, **self.derived}.items() if v}
+        _saved = {k: os.environ[k] for k in subst if k in os.environ}
+        os.environ.update(subst)
+        try:
+            for entry in raw_grids:
+                merged = dict(self.grid)
+                for k, v in _expand(entry or {}).items():
+                    if not _is_blank(v):
+                        merged[k] = v
+                variant = copy.copy(self)
+                variant.grid = merged
+                yield variant
+        finally:
+            for k in subst:
+                if k in _saved:
+                    os.environ[k] = _saved[k]
+                else:
+                    os.environ.pop(k, None)
 
     def for_grid(self, name: str) -> 'taos_config':
         """Return the config variant whose grid.name matches *name*.
@@ -234,6 +247,7 @@ class taos_config:
             'derived': self.derived,
             'machine': {'name': self.machine},
             'topo':    self._raw.get('topo', {}),
+            'maps':    self._raw.get('maps', {}),
         }
         if section not in store:
             return None
