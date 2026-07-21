@@ -35,6 +35,11 @@ DIN_LOC_ROOT=/lcrc/group/e3sm/data/inputdata
 E3SM_ROOT=/lcrc/group/e3sm/ac.whannah/scratch/chrys/tmp_e3sm_src
 DATA_ROOT=/lcrc/group/e3sm/ac.whannah
 
+# OLCF paths
+DIN_LOC_ROOT=/lustre/orion/cli115/world-shared/e3sm/inputdata
+E3SM_ROOT=
+DATA_ROOT=/lustre/orion/cli115/world-shared/e3sm/2026-INCITE-CONUS-RRM
+
 TOPO_ROOT=${DATA_ROOT}/files_topo
 GRID_ROOT=${DATA_ROOT}/files_grid
 MAPS_ROOT=${DATA_ROOT}/files_map
@@ -145,6 +150,55 @@ OUTPUT_ROOT=/global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_domain
 DATESTAMP=20260618
 
 python ${DOMAIN_TOOL} -m ${MAP_FILE} -o RRSwISC6to18E3r5 -l conus-1024x2-pg2 --date-stamp=${DATESTAMP} --output-root=${OUTPUT_ROOT}
+```
+
+Another idea is that `--set-omask` flag in the domain tool might fix the problem
+
+```shell
+E3SM_ROOT=/pscratch/sd/w/whannah/tmp_e3sm_src
+DOMAIN_TOOL=${E3SM_ROOT}/tools/generate_domain_files/generate_domain_files_E3SM.py
+MAP_FILE=/global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_map/map_RRSwISC6to18E3r5_to_conus1024x2v1pg2_traave.20251121.nc
+OUTPUT_ROOT=/global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_domain
+DATESTAMP=20260710
+
+python ${DOMAIN_TOOL} -m ${MAP_FILE} -o RRSwISC6to18E3r5 -l conus-1024x2-pg2 --date-stamp=${DATESTAMP} --output-root=${OUTPUT_ROOT} --set-omask
+
+
+F1=${OUTPUT_ROOT}/domain.lnd.conus-1024x2-pg2_RRSwISC6to18E3r5.${DATESTAMP}.nc
+F2=${OUTPUT_ROOT}/domain.lnd.conus-1024x2-pg2_RRSwISC6to18E3r5.${DATESTAMP}.set-omask.nc
+echo mv ${F1} ${F2}
+mv ${F1} ${F2}
+
+F1=${OUTPUT_ROOT}/domain.ocn.conus-1024x2-pg2_RRSwISC6to18E3r5.${DATESTAMP}.nc
+F2=${OUTPUT_ROOT}/domain.ocn.conus-1024x2-pg2_RRSwISC6to18E3r5.${DATESTAMP}.set-omask.nc
+echo mv ${F1} ${F2}
+mv ${F1} ${F2}
+
+```
+
+perhaps we need to use the "mask" version of the ocean grid?
+
+```shell
+DATESTAMP=20260721
+
+# GRID_OCN=/global/cfs/cdirs/e3sm/inputdata/ocn/mpas-o/RRSwISC6to18E3r5/ocean.RRSwISC6to18E3r5.nomask.scrip.20240327.nc
+GRID_OCN=/global/cfs/cdirs/e3sm/inputdata/ocn/mpas-o/RRSwISC6to18E3r5/ocean.RRSwISC6to18E3r5.mask.scrip.20240327.nc
+GRID_ATM=/global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_grid/2026-incite-conus-1024x2-pg2_scrip.nc
+MAP_FILE=/global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_map/map_RRSwISC6to18E3r5_to_conus1024x2v1pg2_traave.${DATESTAMP}.nc
+TMP_PATH=/global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_tmp
+
+time ncremap -5 --alg_typ=traave --grd_src=${GRID_OCN} --grd_dst=${GRID_ATM} --map_fl=${MAP_FILE} --drc_tmp=${TMP_PATH}
+
+E3SM_ROOT=/pscratch/sd/w/whannah/tmp_e3sm_src
+DOMAIN_TOOL=${E3SM_ROOT}/tools/generate_domain_files/generate_domain_files_E3SM.py
+MAP_FILE=/global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_map/map_RRSwISC6to18E3r5_to_2026-incite-conus-1024x2-pg2_traave.20260610.nc
+OUTPUT_ROOT=/global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_domain
+
+
+python ${DOMAIN_TOOL} -m ${MAP_FILE} -o RRSwISC6to18E3r5 -l conus-1024x2-pg2 --date-stamp=${DATESTAMP} --output-root=${OUTPUT_ROOT}
+
+mv /global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_domain/domain.ocn.conus-1024x2-pg2_RRSwISC6to18E3r5.20260721.nc /global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_domain/domain.ocn.conus-1024x2-pg2_RRSwISC6to18E3r5.20260721.mask-version.nc
+mv /global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_domain/domain.lnd.conus-1024x2-pg2_RRSwISC6to18E3r5.20260721.nc /global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_domain/domain.lnd.conus-1024x2-pg2_RRSwISC6to18E3r5.20260721.mask-version.nc
 ```
 
 --------------------------------------------------------------------------------
