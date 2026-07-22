@@ -773,3 +773,69 @@ class TestUserOverrides:
                 'alice': {'slurm': {'mail_user': 'alice@example.com'}},
             })
         assert cfg.slurm['mail_user'] == 'alice@example.com'
+
+
+# ===========================================================================
+# TestMachineOverrides
+
+class TestMachineOverrides:
+
+    def test_machine_path_override_applied(self, tmp_path):
+        machines_path = write_machines_yaml(tmp_path)
+        cfg = make_cfg(tmp_path, machines_path, project_overrides={
+            'machines': {'TESTMACH': {'paths': {'grid_data_root': '/testmach/proj/data'}}},
+        })
+        assert cfg.paths['grid_data_root'] == '/testmach/proj/data'
+
+    def test_machine_slurm_override_applied(self, tmp_path):
+        machines_path = write_machines_yaml(tmp_path)
+        cfg = make_cfg(tmp_path, machines_path, project_overrides={
+            'machines': {'TESTMACH': {'slurm': {'account': 'testmach_alloc'}}},
+        })
+        assert cfg.slurm['account'] == 'testmach_alloc'
+
+    def test_other_machine_entry_ignored(self, tmp_path):
+        machines_path = write_machines_yaml(tmp_path)
+        cfg = make_cfg(tmp_path, machines_path, project_overrides={
+            'machines': {'OTHERMACH': {'paths': {'grid_data_root': '/other/proj/data'}}},
+        })
+        # active machine is TESTMACH, so OTHERMACH's block does not apply
+        assert cfg.paths['grid_data_root'] == '/mach/data'
+
+    def test_machine_override_wins_over_project_paths(self, tmp_path):
+        machines_path = write_machines_yaml(tmp_path)
+        cfg = make_cfg(tmp_path, machines_path, project_overrides={
+            'paths': {'grid_data_root': '/proj/data'},
+            'machines': {'TESTMACH': {'paths': {'grid_data_root': '/testmach/proj/data'}}},
+        })
+        assert cfg.paths['grid_data_root'] == '/testmach/proj/data'
+
+    def test_user_override_wins_over_machine_override(self, tmp_path):
+        machines_path = write_machines_yaml(tmp_path)
+        cfg = make_cfg_with_users(tmp_path, machines_path, 'alice',
+            users_section={'alice': {'paths': {'grid_data_root': '/alice/data'}}},
+            project_overrides={
+                'machines': {'TESTMACH': {'paths': {'grid_data_root': '/testmach/proj/data'}}},
+            })
+        assert cfg.paths['grid_data_root'] == '/alice/data'
+
+    def test_blank_machine_value_defers_to_lower_priority(self, tmp_path):
+        machines_path = write_machines_yaml(tmp_path)
+        cfg = make_cfg(tmp_path, machines_path, project_overrides={
+            'machines': {'TESTMACH': {'paths': {'grid_data_root': ''}}},
+        })
+        assert cfg.paths['grid_data_root'] == '/mach/data'
+
+    def test_machine_e3sm_src_feeds_homme_tool_derivation(self, tmp_path):
+        machines_path = write_machines_yaml(tmp_path)
+        cfg = make_cfg(tmp_path, machines_path, project_overrides={
+            'machines': {'TESTMACH': {'paths': {'e3sm_src_root': '/testmach/e3sm'}}},
+        })
+        assert cfg.paths['homme_tool_root'] == '/testmach/e3sm/cmake_homme'
+
+    def test_unknown_machine_key_raises(self, tmp_path):
+        machines_path = write_machines_yaml(tmp_path)
+        with pytest.raises(taos_config_error, match='BOGUSMACH'):
+            make_cfg(tmp_path, machines_path, project_overrides={
+                'machines': {'BOGUSMACH': {'paths': {'grid_data_root': '/bogus'}}},
+            })

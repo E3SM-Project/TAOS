@@ -20,6 +20,10 @@ Key design
   known HPC paths; last match wins, mirroring the bash if-chain behavior).
 - Merge rule: a project value takes precedence over the machine default ONLY if
   it is non-empty (not None, not "", not a placeholder like "UNSET").
+- Optional per-machine overrides live under a top-level "machines:" section
+  keyed by machine name (e.g. NERSC, OLCF); the block matching the active
+  machine is applied over the generic project values. Per-user overrides in
+  the "users:" section are applied last.
 - Derived paths (grid_root, maps_root, etc.) are computed automatically from
   grid_data_root and project.name, mirroring set_project_paths.sh.
 """
@@ -160,6 +164,24 @@ class taos_config:
         # _expand_grid_vars for the temporary-injection expansion.
         self.project = dict(self._raw.get('project', {}))
         self.grid = self._expand_grid_vars(dict(self._raw.get('grid', {})))
+
+        # Apply per-machine path/slurm overrides from machines: section
+        _valid_machines = [k for k in self._machines if not k.startswith('_')]
+        _bad_machines = [k for k in (self._raw.get('machines') or {})
+                         if k not in _valid_machines]
+        if _bad_machines:
+            raise taos_config_error(
+                f"Unknown machine name(s) {_bad_machines} in project.yaml "
+                f"machines: section. Valid options: {_valid_machines}"
+            )
+        _mach_section = (self._raw.get('machines') or {}).get(self.machine) or {}
+        if _mach_section:
+            for k, v in (_mach_section.get('paths') or {}).items():
+                if not _is_blank(v):
+                    self.paths[k] = os.path.expandvars(os.path.expanduser(str(v)))
+            for k, v in (_mach_section.get('slurm') or {}).items():
+                if not _is_blank(v):
+                    self.slurm[k] = str(v)
 
         # Apply per-user path/slurm overrides from users: section
         _current_user = os.environ.get('USER', '')

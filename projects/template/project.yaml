@@ -64,6 +64,24 @@ paths:
   mbda_path:       ""
   topo_file_src:   ""
 
+# --- Per-machine overrides (optional) -----------------------------------------
+# The block matching the active machine is applied over the generic paths/slurm
+# sections above, so machine-specific values take effect automatically when
+# switching machines. Blank values defer to taos/machines.yaml as usual.
+# Valid keys: NERSC, LCRC, ALCF, OLCF.
+#
+# machines:
+#   NERSC:
+#     paths:
+#       grid_data_root: "/global/cfs/cdirs/myproj/$USER"
+#     slurm:
+#       account: "myproj"
+#   OLCF:
+#     paths:
+#       grid_data_root: "/lustre/orion/myproj/proj-shared/$USER"
+#     slurm:
+#       account: "myproj"
+
 # --- Topo options (optional) -------------------------------------------------
 
 topo:
