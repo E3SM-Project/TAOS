@@ -71,6 +71,42 @@ class taos_config_error(ValueError):
     pass
 
 
+def load_machines() -> dict:
+    """Return the parsed contents of taos/machines.yaml."""
+    return yaml.safe_load(_MACHINES_YAML.read_text())
+
+
+def detect_machine(machines: dict = None) -> str:
+    """
+    Auto-detect the HPC machine by probing known paths.
+
+    Checked in document order; last match wins (mirrors the bash if-chain
+    in set_machine_paths.sh). Raises taos_config_error if no probe matches.
+    """
+    if machines is None:
+        machines = load_machines()
+    detected = None
+    for name, mdata in machines.items():
+        if name.startswith('_'):
+            continue
+        probe = (mdata.get('detection') or {}).get('probe_path', '')
+        if not probe:
+            continue
+        expanded = os.path.expandvars(probe)
+        # Skip if env var was not expanded (e.g. $SCRATCH unset)
+        if expanded.startswith('$'):
+            continue
+        if os.path.exists(expanded):
+            detected = name
+
+    if detected is None:
+        raise taos_config_error(
+            "Could not auto-detect HPC machine. "
+            "Set 'machine: {name: NERSC}' (or LCRC/ALCF/OLCF) in project.yaml."
+        )
+    return detected
+
+
 class taos_config:
     """
     Loads, merges, and validates a TAOS project configuration.
@@ -106,7 +142,7 @@ class taos_config:
         self.proj_dir = self._proj_yaml_path.parent
 
         # Load machine definitions
-        self._machines = yaml.safe_load(_MACHINES_YAML.read_text())
+        self._machines = load_machines()
 
         # Load project YAML
         self._raw = yaml.safe_load(self._proj_yaml_path.read_text()) or {}
@@ -378,26 +414,7 @@ class taos_config:
             return override
 
         # Auto-detect by probing known paths (last match wins, same as bash)
-        detected = None
-        for name, mdata in self._machines.items():
-            if name.startswith('_'):
-                continue
-            probe = (mdata.get('detection') or {}).get('probe_path', '')
-            if not probe:
-                continue
-            expanded = os.path.expandvars(probe)
-            # Skip if env var was not expanded (e.g. $SCRATCH unset)
-            if expanded.startswith('$'):
-                continue
-            if os.path.exists(expanded):
-                detected = name
-
-        if detected is None:
-            raise taos_config_error(
-                "Could not auto-detect HPC machine. "
-                "Set 'machine: {name: NERSC}' (or LCRC/ALCF/OLCF) in project.yaml."
-            )
-        return detected
+        return detect_machine(self._machines)
 
     # ------------------------------------------------------------------
     # Internal: merging
