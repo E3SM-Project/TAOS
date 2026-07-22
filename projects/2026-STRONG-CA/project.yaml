@@ -35,19 +35,19 @@ grid:
   spa_file: ""
 
   # Use homme_tool for np4 SCRIP generation (instead of pure-Python path)
-  homme_np4_scrip:  true
+  homme_np4_scrip:  false
 
 grids:
   # ne32 base w/ 5x refinement => dx-pg2 ~ 4-175 km
   - name: "STRONG-CA-32x5-v1"
-    grid_file_exodus: ${grid_root}/STRONG-CA-32x5-v1.g
+    # grid_file_exodus: ${grid_root}/STRONG-CA-32x5-v1.g
   - name: "STRONG-CA-32x5-v2"
-    grid_file_exodus: ${grid_root}/STRONG-CA-32x5-v2.g
+    # grid_file_exodus: ${grid_root}/STRONG-CA-32x5-v2.g
   # ne128 base w/ 3x refinement => dx-pg2 ~ 4-44 km
-  - name: "STRONG-CA-128x3-v1"
-    grid_file_exodus: ${grid_root}/STRONG-CA-128x3-v1.g
-  - name: "STRONG-CA-128x3-v2"
-    grid_file_exodus: ${grid_root}/STRONG-CA-128x3-v2.g
+  # - name: "STRONG-CA-128x3-v1"
+  #   grid_file_exodus: ${grid_root}/STRONG-CA-128x3-v1.g
+  # - name: "STRONG-CA-128x3-v2"
+  #   grid_file_exodus: ${grid_root}/STRONG-CA-128x3-v2.g
 
 # --- Machine override (optional) ---------------------------------------------
 # Set name only if auto-detection fails or you need to force a specific machine.
@@ -61,15 +61,34 @@ machine:
 
 paths:
   grid_code_root:  ""
-  grid_data_root:  "/global/cfs/cdirs/m5277/whannah"
+  grid_data_root:  ""
   e3sm_src_root:   ""
   DIN_LOC_ROOT:    ""
   unified_bin:     ""
   unified_src:     ""
   homme_tool_root: ""
   mbda_path:       ""
-  # topo_file_src:   "/global/cfs/cdirs/e3sm/zhang73/grids2/topo30s/usgs-rawdata.nc"
-  topo_file_src:   "/global/cfs/cdirs/e3sm/zhang73/grids2/topo7.5s/GMTED2010_7.5_stitch_S5P_OPER_REF_DEM_15_NCL_24-3.r172800x86400.nc"
+  topo_file_src:   ""
+
+# --- Per-machine overrides (optional) -----------------------------------------
+# The block matching the active machine is applied over the generic paths/slurm
+# sections above, so machine-specific values here take effect automatically —
+# no commenting/uncommenting needed when switching machines. Blank values defer
+# as usual to the machine defaults in taos/machines.yaml.
+
+machines:
+  NERSC:
+    paths:
+      grid_data_root: "/global/cfs/cdirs/m5277/whannah"
+      # topo_file_src:  "/global/cfs/cdirs/e3sm/zhang73/grids2/topo30s/usgs-rawdata.nc"
+      topo_file_src:  "/global/cfs/cdirs/e3sm/zhang73/grids2/topo7.5s/GMTED2010_7.5_stitch_S5P_OPER_REF_DEM_15_NCL_24-3.r172800x86400.nc"
+    slurm:
+      account: "m5277"
+  # OLCF:
+  #   paths:
+  #     grid_data_root: "/lustre/orion/cli115/proj-shared/$USER/TAOS"
+  #   slurm:
+  #     account: "cli115"
 
 # --- Topo options ------------------------------------------------------------
 
@@ -88,6 +107,6 @@ topo:
 slurm:
   mail_user:  ""
   mail_type:  ""
-  account:    "m5277"
+  account:    ""    # set per-machine in machines: section above
   constraint: ""
   qos:        ""
