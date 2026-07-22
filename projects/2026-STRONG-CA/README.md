@@ -21,9 +21,12 @@ The details of the SQuadGen commands and some variations are described next.
 
 ```shell
 
-DATA_ROOT=/global/cfs/cdirs/m5277/whannah/2026-STRONG-CA
+# DATA_ROOT=/global/cfs/cdirs/m5277/whannah/2026-STRONG-CA
+DATA_ROOT=/lustre/orion/cli115/proj-shared/hannah6/TAOS
 GRID_ROOT=${DATA_ROOT}/files_grid
-REF_IMAGE_ROOT=/global/homes/w/whannah/E3SM_grid_support/projects/2026-STRONG
+REF_IMAGE_ROOT=~/TAOS/projects/2026-STRONG-CA
+
+mkdir -p ${GRID_ROOT}
 
 REF_IMAGE_V1=${REF_IMAGE_ROOT}/2026-STRONG-CA-RRM_refinement_image_v1.png # w/  halo region
 REF_IMAGE_V2=${REF_IMAGE_ROOT}/2026-STRONG-CA-RRM_refinement_image_v2.png # w/o halo region
@@ -37,8 +40,8 @@ BASE_RES=128;REFINE_LVL=3; REF_IMAGE=$REF_IMAGE_V2; GRID_NAME=STRONG-CA-${BASE_R
 SQuadGen --refine_file ${REF_IMAGE} --resolution ${BASE_RES} --refine_level ${REFINE_LVL} \
 --refine_type LOWCONN --smooth_type SPRING --smooth_dist 10 --smooth_iter 20 \
 --lon_ref 240 --lat_ref 38 --output ${GRID_ROOT}/${GRID_NAME}.g
-GenerateVolumetricMesh --in ${GRID_ROOT}/${GRID_NAME}.g     --out ${GRID_ROOT}/${GRID_NAME}-pg2.g --np 2 --uniform
-ConvertMeshToSCRIP     --in ${GRID_ROOT}/${GRID_NAME}-pg2.g --out ${GRID_ROOT}/${GRID_NAME}-pg2_scrip.nc
+GenerateVolumetricMesh --in ${GRID_ROOT}/${GRID_NAME}.g     --out ${GRID_ROOT}/${GRID_NAME}pg2.g --np 2 --uniform
+ConvertMeshToSCRIP     --in ${GRID_ROOT}/${GRID_NAME}pg2.g --out ${GRID_ROOT}/${GRID_NAME}pg2_scrip.nc
 ls -l ${GRID_ROOT}/${GRID_NAME}*
 
 # Commands to generate uniform (i.e. unrefined) grids for comparison
