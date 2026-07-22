@@ -286,12 +286,32 @@ class TestRemapFiles(unittest.TestCase):
 # optional comparison against the compiled MBDA binary
 
 
-_MBDA_BIN = os.environ.get('TAOS_TEST_MBDA_PATH', '')
+def _find_mbda_bin() -> str:
+    """Locate the compiled MBDA binary for the integration test.
+
+    TAOS_TEST_MBDA_PATH takes precedence; otherwise fall back to the
+    auto-detected machine's mbda_path from taos/machines.yaml. Returns
+    '' when neither yields a usable path (test is skipped).
+    """
+    path = os.environ.get('TAOS_TEST_MBDA_PATH', '')
+    if path:
+        return path
+    try:
+        from taos.config import detect_machine, load_machines
+        machines = load_machines()
+        machine = detect_machine(machines)
+        default = machines[machine].get('paths', {}).get('mbda_path', '') or ''
+        return os.path.expandvars(os.path.expanduser(default))
+    except Exception:
+        return ''
 
 
-@unittest.skipIf(not _MBDA_BIN or not os.path.exists(_MBDA_BIN),
+_MBDA_BIN = _find_mbda_bin()
+
+
+@unittest.skipIf(not _MBDA_BIN or not os.path.isfile(_MBDA_BIN),
                  "compiled MBDA binary not available "
-                 "(set TAOS_TEST_MBDA_PATH to enable)")
+                 "(set TAOS_TEST_MBDA_PATH or machines.yaml mbda_path to enable)")
 class TestAgainstCompiledMBDA(unittest.TestCase):
     """
     Integration check — only runs when TAOS_TEST_MBDA_PATH points at a
@@ -320,9 +340,16 @@ class TestAgainstCompiledMBDA(unittest.TestCase):
 
         remap_files(src, tgt, py_out, fields=['htopo'],
                     square_fields=['htopo'], dof_var='grid_size', verbose=False)
+        # Note: no --dof-var here — mbda applies it to the TARGET mesh
+        # dimension (default 'ncol'), not the source; the SCRIP source
+        # layout is auto-detected. PNETCDF_HINTS pins the classic MPI-IO
+        # driver: PnetCDF 1.15.0's new GIO Lustre driver SIGFPEs on open
+        # (observed on OLCF Andes, July 2026).
+        env = dict(os.environ)
+        env.setdefault('PNETCDF_HINTS', 'nc_driver=mpiio')
         sp.run([_MBDA_BIN, '--target', tgt, '--source', src, '--output', cc_out,
-                '--fields', 'htopo', '--square-fields', 'htopo',
-                '--dof-var', 'grid_size'], check=True)
+                '--fields', 'htopo', '--square-fields', 'htopo'],
+               check=True, env=env)
 
         with netCDF4.Dataset(py_out) as py, netCDF4.Dataset(cc_out) as cc:
             py_f = py.variables['htopo'][:]
