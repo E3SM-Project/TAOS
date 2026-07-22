@@ -1,6 +1,6 @@
-# =============================================================================
+# ==============================================================================
 # TAOS Machine Defaults
-# =============================================================================
+# ==============================================================================
 # Machine-level default paths and SLURM settings for each supported HPC system.
 #
 # Values support shell-style env var expansion ($VAR or ${VAR}), applied at
@@ -13,7 +13,7 @@
 # detection.probe_path: a path that exists only on that machine, used for
 # auto-detection. Checked in document order; last match wins (mirrors the
 # bash if-chain in set_machine_paths.sh).
-# =============================================================================
+# ==============================================================================
 
 # Keys listed here are checked by SwagConfig.validate() when no explicit
 # required_keys list is passed. Keys under paths are expected to be non-empty
@@ -31,20 +31,20 @@ _required_keys:
   slurm:
     - account
 
-# -----------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 LCRC:
   detection:
     probe_path: "/lcrc/group/e3sm/$USER"
   paths:
-    grid_code_root:  "$HOME/E3SM_grid_support"
-    grid_data_root:  "/lcrc/group/e3sm/$USER/scratch/chrys/E3SM_grid_support"
+    grid_code_root:  "$HOME/TAOS"
+    grid_data_root:  "/lcrc/group/e3sm/$USER/scratch/chrys/TAOS"
     e3sm_src_root:   "/lcrc/group/e3sm/$USER/scratch/chrys/tmp_e3sm_src"
     DIN_LOC_ROOT:    "/lcrc/group/e3sm/data/inputdata"
     unified_bin:     "/lcrc/soft/climate/e3sm-unified/base/envs/e3sm_unified_1.11.1_login/bin"
     unified_src:     "/lcrc/soft/climate/e3sm-unified/load_latest_e3sm_unified_chrysalis.sh"
-    homme_tool_root: ""  # derived at load time: e3sm_src_root/cmake_homme
+    homme_tool_root: ""  # derived at load time => e3sm_src_root/cmake_homme
     mbda_path:       "/lcrc/soft/climate/moab/chrysalis/intel/bin/mbda"
-    topo_file_src:   "/lcrc/group/e3sm/$USER/scratch/chrys/E3SM_grid_support/topo7.5s/GMTED2010_7.5_stitch_S5P_OPER_REF_DEM_15_NCL_24-3.r172800x86400.nc"
+    topo_file_src:   "/lcrc/group/e3sm/$USER/scratch/chrys/TAOS/topo7.5s/GMTED2010_7.5_stitch_S5P_OPER_REF_DEM_15_NCL_24-3.r172800x86400.nc"
   slurm:
     mail_user:  ""
     mail_type:  "END,FAIL"
@@ -52,18 +52,18 @@ LCRC:
     constraint: ""
     qos:        "regular"
 
-# -----------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 NERSC:
   detection:
     probe_path: "$SCRATCH"
   paths:
-    grid_code_root:  "$HOME/E3SM_grid_support"
-    grid_data_root:  "/global/cfs/cdirs/e3sm/$USER/E3SM_grid_support"
+    grid_code_root:  "$HOME/TAOS"
+    grid_data_root:  "/global/cfs/cdirs/e3sm/$USER/TAOS"
     e3sm_src_root:   "$SCRATCH/tmp_e3sm_src"
     DIN_LOC_ROOT:    "/global/cfs/cdirs/e3sm/inputdata"
     unified_bin:     "/global/common/software/e3sm/anaconda_envs/e3smu_1_12_0/pm-cpu/conda/envs/e3sm_unified_1.12.0_login/bin"
     unified_src:     "/global/common/software/e3sm/anaconda_envs/load_latest_e3sm_unified_pm-cpu.sh"
-    homme_tool_root: ""  # derived at load time: e3sm_src_root/cmake_homme
+    homme_tool_root: ""  # derived at load time => e3sm_src_root/cmake_homme
     mbda_path:       "/global/cfs/cdirs/e3sm/software/moab/intel/bin/mbda"
     # topo_file_src:   "/global/cfs/cdirs/e3sm/zhang73/grids2/topo30s/usgs-rawdata.nc"
     topo_file_src:   "/global/cfs/cdirs/e3sm/zhang73/grids2/topo7.5s/GMTED2010_7.5_stitch_S5P_OPER_REF_DEM_15_NCL_24-3.r172800x86400.nc"
@@ -74,18 +74,18 @@ NERSC:
     constraint: "cpu"
     qos:        "regular"
 
-# -----------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 ALCF:
   detection:
     probe_path: "/lus/flare/projects/E3SM_Dec/$USER"
   paths:
-    grid_code_root:  "$HOME/E3SM_grid_support"
-    grid_data_root:  "/lus/flare/projects/E3SM_Dec/$USER/E3SM_grid_support"
+    grid_code_root:  "$HOME/TAOS"
+    grid_data_root:  "/lus/flare/projects/E3SM_Dec/$USER/TAOS"
     e3sm_src_root:   "/lus/flare/projects/E3SM_Dec/$USER/e3sm_src"
     DIN_LOC_ROOT:    "/lus/flare/projects/E3SMinput/data"
     unified_bin:     "/lus/flare/projects/E3SMinput/soft/e3sm-unified/e3smu_1_12_0/aurora/conda/envs/e3sm_unified_1.12.0_login/bin"
     unified_src:     "/lus/flare/projects/E3SMinput/soft/e3sm-unified/load_latest_e3sm_unified_aurora.sh"
-    homme_tool_root: ""  # derived at load time: e3sm_src_root/cmake_homme
+    homme_tool_root: ""  # derived at load time => e3sm_src_root/cmake_homme
     mbda_path:       ""  # not yet available on ALCF — set in project.yaml if needed
     topo_file_src:   ""  # not yet available on ALCF — set in project.yaml if needed
   slurm:
@@ -95,23 +95,23 @@ ALCF:
     constraint: ""
     qos:        ""
 
-# -----------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 OLCF:
   detection:
     probe_path: "/lustre/orion/cli115/proj-shared/$USER"
   paths:
-    grid_code_root:  "$HOME/E3SM_grid_support"
-    grid_data_root:  ""  # not yet configured — set in project.yaml
-    e3sm_src_root:   ""
-    DIN_LOC_ROOT:    ""
-    unified_bin:     ""
-    unified_src:     ""
-    homme_tool_root: ""
-    mbda_path:       ""
-    topo_file_src:   ""
+    grid_code_root:  "$HOME/TAOS"
+    grid_data_root:  "/lustre/orion/cli115/proj-shared/$USER/TAOS"
+    e3sm_src_root:   "/lustre/orion/cli115/proj-shared/$USER/e3sm_src"
+    DIN_LOC_ROOT:    "/lustre/orion/cli115/world-shared/e3sm/inputdata"
+    unified_bin:     "/autofs/nccs-svm1_proj/cli115/software/e3sm-unified/e3smu_1_13_0/andes/pixi/.pixi/envs/default/bin"
+    unified_src:     "/ccs/proj/cli115/software/e3sm-unified/load_latest_e3sm_unified_andes.sh"
+    homme_tool_root: "" # derived at load time => e3sm_src_root/cmake_homme
+    mbda_path:       "/lustre/orion/cli115/proj-shared/TAOS/mbda/mbda"
+    topo_file_src:   "/lustre/orion/cli115/proj-shared/TAOS/high-res-topo/GMTED2010_7.5_stitch_S5P_OPER_REF_DEM_15_NCL_24-3.r172800x86400.nc"
   slurm:
     mail_user:  ""
     mail_type:  "END,FAIL"
-    account:    ""
+    account:    "cli115"
     constraint: ""
     qos:        ""

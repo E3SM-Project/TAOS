@@ -479,8 +479,16 @@ class TestMachineDetection:
             'grid':    {'name': 'ne30pg2'},
         }))
 
+        # Intercept only machine-probe paths; delegate real files to the
+        # actual os.path.exists. (On Python 3.14+ pathlib.Path.exists()
+        # also routes through os.path.exists, so a blanket fake would
+        # make the project.yaml existence check fail too.)
+        real_exists = os.path.exists
+
         def fake_exists(path):
-            return path == '/exists/othermach'
+            if str(path).startswith(('/exists/', '/nonexistent/')):
+                return path == '/exists/othermach'
+            return real_exists(path)
 
         with patch('taos.config._MACHINES_YAML', machines_path):
             with patch('taos.config.os.path.exists', side_effect=fake_exists):
@@ -496,8 +504,17 @@ class TestMachineDetection:
             'grid':    {'name': 'ne30pg2'},
         }))
 
+        # Fail only machine-probe paths, not real files (see note in
+        # test_auto_detect_othermach about Python 3.14 pathlib behavior).
+        real_exists = os.path.exists
+
+        def fake_exists(path):
+            if str(path).startswith(('/exists/', '/nonexistent/')):
+                return False
+            return real_exists(path)
+
         with patch('taos.config._MACHINES_YAML', machines_path):
-            with patch('taos.config.os.path.exists', return_value=False):
+            with patch('taos.config.os.path.exists', side_effect=fake_exists):
                 with pytest.raises(taos_config_error) as exc_info:
                     taos_config(proj_yaml)
         assert 'auto-detect' in str(exc_info.value).lower() or 'machine' in str(exc_info.value).lower()
