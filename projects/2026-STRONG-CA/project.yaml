@@ -30,6 +30,11 @@ grid:
   lnd_name: ""
   lnd_file: ""
 
+  # ocn_name: "IcoswISC30E3r5"
+  # ocn_file: "${DIN_LOC_ROOT}/share/meshes/mpas/ocean/"
+  # lnd_name: "r05"
+  # lnd_file: "???"
+
   # SPA grid — optional, only needed for EAMxx SPA maps (defaults to <name>pg2)
   spa_name: ""
   spa_file: ""
@@ -46,8 +51,12 @@ grids:
   # ne32 base w/ 5x refinement => dx-pg2 ~ 4-175 km
   - name: "STRONG-CA-32x5-v1"
     # grid_file_exodus: ${grid_root}/STRONG-CA-32x5-v1.g
+    ocn_name: "STRONG-CA-32x5-v1"
+    lnd_name: "STRONG-CA-32x5-v1"
   - name: "STRONG-CA-32x5-v2"
     # grid_file_exodus: ${grid_root}/STRONG-CA-32x5-v2.g
+    ocn_name: "STRONG-CA-32x5-v2"
+    lnd_name: "STRONG-CA-32x5-v2"
 
   # # ne128 base w/ 3x refinement => dx-pg2 ~ 4-44 km
   # - name: "STRONG-CA-128x3-v1"
