@@ -25,6 +25,18 @@ from taos.maps import (
 )
 
 # ---------------------------------------------------------------------------
+# ensure_dir touches the real filesystem; MockConfig roots are fake paths
+# that must not be created, so patch it module-wide.
+
+_ensure_dir_patch = patch('taos.maps.ensure_dir')
+
+def setUpModule():
+    _ensure_dir_patch.start()
+
+def tearDownModule():
+    _ensure_dir_patch.stop()
+
+# ---------------------------------------------------------------------------
 # helpers
 
 class MockConfig:

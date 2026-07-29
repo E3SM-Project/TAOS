@@ -15,7 +15,7 @@ Usage
 import os
 
 from taos.config import taos_config
-from taos.util import clr, print_line, run_cmd, timer
+from taos.util import clr, ensure_dir, print_line, run_cmd, timer
 
 # -------------------------------------------------------------------
 # internal helpers
@@ -49,6 +49,8 @@ def create_domain(cfg, create_domain_map=False):
     ocn_grid_file = cfg['grid.ocn_file']
     maps_root     = cfg['derived.maps_root']
     domn_root     = cfg['derived.domn_root']
+    ensure_dir(domn_root)
+    ensure_dir(maps_root)  # create_domain_map writes the ocn→atm map here
     timestamp     = cfg['project.timestamp']
     e3sm_src_root = cfg['paths.e3sm_src_root']
     atm_grid_file = f'{cfg["derived.grid_root"]}/{atm_grid_name}_scrip.nc'
