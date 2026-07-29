@@ -47,16 +47,18 @@ grid_root = '/global/cfs/cdirs/e3sm/whannah/files_grid'
 topo_root = '/global/cfs/cdirs/e3sm/inputdata/atm/cam/topo'
 # add_grid(f'{grid_root}/ne256pg2_scrip.nc',  'ne256',  clat=38, clon=-120, topo_file=f'{topo_root}/USGS-gtopo30_ne256np4pg2_x6t-SGH.nc')
 
-grid_root = '/global/cfs/cdirs/m5277/whannah/2026-STRONG-CA/files_grid'
-topo_root = '/global/cfs/cdirs/m5277/whannah/2026-STRONG-CA/files_topo'
-# add_grid(f'{grid_root}/STRONG-CA-32x5-v1-pg2_scrip.nc',  name='CA-32x5-v1',  clat=38, clon=-120, topo_file=None)#f'{topo_root}/????')
-add_grid(f'{grid_root}/STRONG-CA-32x5-v2-pg2_scrip.nc',  name='CA-32x5-v2',  clat=38, clon=-120, topo_file=None)#f'{topo_root}/????')
-# add_grid(f'{grid_root}/STRONG-CA-128x3-v1-pg2_scrip.nc', name='CA-128x3-v1',  clat=38, clon=-120, topo_file=None)#f'{topo_root}/????')
-# add_grid(f'{grid_root}/STRONG-CA-128x3-v2-pg2_scrip.nc', name='CA-128x3-v2',  clat=38, clon=-120, topo_file=None)#f'{topo_root}/????')
+proj_root = '/lustre/orion/cli115/proj-shared/hannah6/TAOS/2026-STRONG-CA'
+# proj_root = '/global/cfs/cdirs/m5277/whannah/2026-STRONG-CA'
+grid_root = f'{proj_root}/files_grid'
+topo_root = f'{proj_root}/files_topo'
+add_grid(f'{grid_root}/STRONG-CA-32x5-v1pg2_scrip.nc',   name='CA-32x5-v1',   clat=38, clon=-120, topo_file=None)#f'{topo_root}/????')
+add_grid(f'{grid_root}/STRONG-CA-32x5-v2pg2_scrip.nc',   name='CA-32x5-v2',   clat=38, clon=-120, topo_file=None)#f'{topo_root}/????')
+# add_grid(f'{grid_root}/STRONG-CA-128x3-v1pg2_scrip.nc', name='CA-128x3-v1',  clat=38, clon=-120, topo_file=None)#f'{topo_root}/????')
+# add_grid(f'{grid_root}/STRONG-CA-128x3-v2pg2_scrip.nc', name='CA-128x3-v2',  clat=38, clon=-120, topo_file=None)#f'{topo_root}/????')
 
 # ------------------------------------------------------------------------------
 # Shade mode: 'area', 'topo', or 'lines'
-shade_mode = 'lines'
+shade_mode = 'area'
 
 # Color scale for 'area' mode — approximate grid spacing [km]
 dx_min = 3.0
@@ -72,9 +74,9 @@ half_w = 50
 half_h = 30
 
 # Panel layout and figure size [inches per panel]
-num_plot_col = 1#len(grids)
-panel_w      = 5.5
-panel_h      = 5.5
+num_plot_col = 2#len(grids)
+panel_w      = 6
+panel_h      = 4
 
 # --------------------------------------------------------------------------------------------------
 # Colormaps

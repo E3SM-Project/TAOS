@@ -19,8 +19,8 @@ def run_cmd(cmd):
 
 #-------------------------------------------------------------------------------
 
-fig_file = '2026-STRONG-CA-RRM_refinement_image_v1.png' # fuzz 90%
-# fig_file = '2026-STRONG-CA-RRM_refinement_image_v2.png' # fuzz 70%
+# fig_file = '2026-STRONG-CA-RRM_refinement_image_v1.png'; fuzz_arg = '-fuzz 70%'; add_buffer_reg = False
+fig_file = '2026-STRONG-CA-RRM_refinement_image_v2.png'; fuzz_arg = '-fuzz 90%'; add_buffer_reg = True
 
 #-------------------------------------------------------------------------------
 # cmd  = f'magick convert {fig_file} ( +clone -blur 0x20 -fuzz 90% -fill gray -opaque white )'
@@ -116,14 +116,16 @@ if os.path.isfile(fig_file):
     
     # Expand refined region to create coastal buffer
     # run_cmd(f'magick convert {fig_file} -blur 0x10 -fuzz 90% -fill white -opaque white {fig_file}')
-    run_cmd(f'magick convert {fig_file} -blur 0x10 -fuzz 70% -fill white -opaque white {fig_file}')
+    # run_cmd(f'magick convert {fig_file} -blur 0x10 -fuzz 70% -fill white -opaque white {fig_file}')
+    run_cmd(f'magick convert {fig_file} -blur 0x10 {fuzz_arg} -fill white -opaque white {fig_file}')
 
-    # make a "halo" to define an intermediate resolution buffer
-    halo_file = fig_file.replace('.png','.halo.png')
-    run_cmd(f'magick convert {fig_file} -blur 0x50 -threshold 1% -fill gray50 -opaque white {halo_file}')
-    
-    # Composite: black background + gray halo + original white shape
-    run_cmd(f'magick convert {halo_file} {fig_file} -compose Lighten -composite {fig_file}')
+    if add_buffer_reg:
+        # make a "halo" to define an intermediate resolution buffer
+        halo_file = fig_file.replace('.png','.halo.png')
+        run_cmd(f'magick convert {fig_file} -blur 0x50 -threshold 1% -fill gray50 -opaque white {halo_file}')
+
+        # Composite: black background + gray halo + original white shape
+        run_cmd(f'magick convert {halo_file} {fig_file} -compose Lighten -composite {fig_file}')
 
 else:
     raise FileNotFoundError(f'\n{fig_file} does not exist?!\n')

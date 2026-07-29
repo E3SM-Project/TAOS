@@ -31,9 +31,15 @@ grid:
   lnd_file: ""
 
   # ocn_name: "IcoswISC30E3r5"
-  # ocn_file: "${DIN_LOC_ROOT}/share/meshes/mpas/ocean/"
+  # ocn_file: "${DIN_LOC_ROOT}/ocn/mpas-o/IcoswISC30E3r5/ocean.IcoswISC30E3r5.mask.scrip.20231120.nc"
   # lnd_name: "r05"
-  # lnd_file: "???"
+  # lnd_file: "${DIN_LOC_ROOT}/lnd/clm2/mappingdata/grids/SCRIPgrid_0.5x0.5_nomask_c110308.nc"
+
+  ocn_name: "RRSwISC6to18E3r5"
+  ocn_file: "${DIN_LOC_ROOT}/ocn/mpas-o/RRSwISC6to18E3r5/ocean.RRSwISC6to18E3r5.mask.scrip.20240327.nc"
+
+  lnd_name: "r0125"
+  lnd_file: "${DIN_LOC_ROOT}/lnd/clm2/mappingdata/grids/MOSART_global_8th.scrip.20180211c.nc"
 
   # SPA grid — optional, only needed for EAMxx SPA maps (defaults to <name>pg2)
   spa_name: ""
@@ -45,22 +51,22 @@ grid:
 grids:
 
   # grid version notes:
-  #   v1 - inner refinement follows CA coastline - include wide intermediate resolution buffer
-  #   v2 - same as v1 but w/o the buffer
+  #   v1 - inner refinement follows CA coastline
+  #   v2 - same as v1 but includes wide buffer region w/ intermediate resolution
 
-  # ne32 base w/ 5x refinement => dx-pg2 ~ 4-175 km
+  #  32x5 =>  ne32 base w/ 5x refinement => dx-pg2 ~ 4-175 km
+  # 128x3 => ne128 base w/ 3x refinement => dx-pg2 ~ 4-44 km
+
   - name: "STRONG-CA-32x5-v1"
     # grid_file_exodus: ${grid_root}/STRONG-CA-32x5-v1.g
     ocn_name: "STRONG-CA-32x5-v1"
     lnd_name: "STRONG-CA-32x5-v1"
   - name: "STRONG-CA-32x5-v2"
     # grid_file_exodus: ${grid_root}/STRONG-CA-32x5-v2.g
-    ocn_name: "STRONG-CA-32x5-v2"
-    lnd_name: "STRONG-CA-32x5-v2"
 
-  # # ne128 base w/ 3x refinement => dx-pg2 ~ 4-44 km
   # - name: "STRONG-CA-128x3-v1"
   #   grid_file_exodus: ${grid_root}/STRONG-CA-128x3-v1.g
+
   # - name: "STRONG-CA-128x3-v2"
   #   grid_file_exodus: ${grid_root}/STRONG-CA-128x3-v2.g
 

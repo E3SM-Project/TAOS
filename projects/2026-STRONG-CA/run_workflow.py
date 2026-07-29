@@ -10,6 +10,7 @@ for interactive workflow at NERSC:
     python run_workflow.py
 
 for interactive workflow at OLCF:
+    salloc --time 4:00:00 --account=cli115 --nodes=1 --cpus-per-task=32
     salloc --time 4:00:00 --account=cli115 --nodes=4 --cpus-per-task=32
     micromamba activate taos_env
     python run_workflow.py
@@ -34,8 +35,8 @@ slurm_qos        = cfg.get('slurm.qos', '')
 
 use_batch = True  # set False to run steps directly on the current node
 
-do_maps   = False
-do_domain = False
+do_maps   = True
+do_domain = True
 do_topo   = True
 
 #-------------------------------------------------------------------------------
@@ -44,8 +45,8 @@ do_topo   = True
 
 # active_grids = None
 active_grids = [
-                # 'STRONG-CA-32x5-v1',
-                'STRONG-CA-32x5-v2',
+                'STRONG-CA-32x5-v1',
+                # 'STRONG-CA-32x5-v2',
                 ]
 
 #-------------------------------------------------------------------------------
@@ -106,7 +107,12 @@ for grid_cfg in cfg.iter_grids():
 
         cmd = f'python -m taos.topo {yaml_path} --grid-name {grid_name} {topo_args}'
         if use_batch:
-            topo_slurm_opts = '--nodes=4 --cpus-per-task=32 --time=1:00:00'
+            # mbda is a single-node process, and the pg2 pass (--square-fields)
+            # holds two full copies of the 14.9B-point source (~240 GB) — more
+            # than an Andes batch node (230 GB). The Andes gpu partition nodes
+            # have 960 GB / 56 cores.
+            topo_slurm_opts = '--partition=gpu --nodes=1 --cpus-per-task=56 --time=1:00:00'
+            # topo_slurm_opts = '--nodes=4 --cpus-per-task=32 --time=1:00:00'
             run_cmd(f'{sbatch} --job-name=gen_topo_{grid_name} {topo_slurm_opts} --wrap="{cmd}"')
         else:
             run_cmd(cmd)
