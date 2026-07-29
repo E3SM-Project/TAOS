@@ -29,10 +29,61 @@ def print_line(width=80):
     print('  ' + '-' * width)
 
 # -------------------------------------------------------------------
+# filesystem helpers
+
+def ensure_dir(path):
+    """Create a directory (and parents) if it doesn't already exist.
+
+    Workflow stages write into derived output roots (files_topo, files_map,
+    etc.) that nothing else creates — external tools like mbda fail with
+    confusing errors when the parent directory is missing.
+    """
+    if path:
+        os.makedirs(path, exist_ok=True)
+
+
+# -------------------------------------------------------------------
 # command execution
 
+# Cache get_case_env usability per tool path — probing it spawns CIME once,
+# which is slow, and the answer cannot change within a single process.
+_cime_env_cache = {}
+
+def cime_env_ok(cfg):
+    """Return True if CIME's get_case_env exists and produces a usable env.
+
+    False on machines E3SM doesn't support (e.g. OLCF Andes, where
+    get_case_env exists but fails machine detection at runtime) or when
+    the cime submodule isn't initialized.
+    """
+    e3sm_src = cfg['paths.e3sm_src_root']
+    tool = f'{e3sm_src}/cime/CIME/Tools/get_case_env' if e3sm_src else ''
+    if tool not in _cime_env_cache:
+        ok = bool(tool) and os.path.exists(tool)
+        reason = 'not found (cime submodule initialized?)'
+        if ok:
+            result = sp.run(tool, shell=True, capture_output=True, text=True,
+                            executable='/bin/bash')
+            ok = result.returncode == 0 and bool(result.stdout.strip())
+            reason = 'failed — machine not supported by E3SM?'
+        if not ok:
+            print(f'\n  {clr.YELLOW}NOTE: get_case_env {reason}'
+                  f'\n  ({tool})'
+                  f'\n  Proceeding without the CIME case env — conda-built'
+                  f' tools (mbda, TempestRemap, NCO) do not need it.{clr.END}')
+        _cime_env_cache[tool] = ok
+    return _cime_env_cache[tool]
+
+
 def e3sm_env_prefix(cfg):
-    """Return a bash one-liner that loads the E3SM module environment."""
+    """Return a bash one-liner that loads the E3SM module environment.
+
+    Returns a no-op ('true') when the CIME env is unavailable — see
+    cime_env_ok(). Code paths that genuinely require the CIME env
+    (homme_tool) must guard with cime_env_ok() and fail loudly instead.
+    """
+    if not cime_env_ok(cfg):
+        return 'true'
     e3sm_src = cfg['paths.e3sm_src_root']
     return f'eval $({e3sm_src}/cime/CIME/Tools/get_case_env) 2>/dev/null'
 

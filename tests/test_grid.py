@@ -30,6 +30,30 @@ from taos.grid import (
 )
 
 # ---------------------------------------------------------------------------
+# The homme_np4_scrip path guards on cime_env_ok(), which probes the real
+# filesystem for get_case_env. Patch it True module-wide so the command-
+# construction tests behave as on a CIME-supported machine; the guard itself
+# is covered by test_homme_np4_requires_cime_env. Both patch targets are
+# needed: taos.grid.cime_env_ok covers the guard, taos.util.cime_env_ok
+# covers the call inside e3sm_env_prefix (resolved in util's namespace).
+# ensure_dir is patched too: MockConfig roots are fake paths that must not
+# be created on the real filesystem.
+
+_cime_env_patches = [
+    patch('taos.grid.cime_env_ok', return_value=True),
+    patch('taos.util.cime_env_ok', return_value=True),
+    patch('taos.grid.ensure_dir'),
+]
+
+def setUpModule():
+    for p in _cime_env_patches:
+        p.start()
+
+def tearDownModule():
+    for p in _cime_env_patches:
+        p.stop()
+
+# ---------------------------------------------------------------------------
 # synthetic ne=1 cube-sphere mesh fixture (shared with test_sem.py)
 
 _S3 = 1.0 / np.sqrt(3.0)
@@ -315,6 +339,16 @@ class TestCreateGridCommands(unittest.TestCase):
         self.assertEqual(len(matching), 1)
         nl_file = _grid_paths(MockConfig())['nl_file']
         self.assertIn(nl_file, matching[0])
+
+    def test_homme_np4_requires_cime_env(self):
+        """Guard: homme_np4_scrip must fail loudly without a usable CIME env."""
+        with patch('taos.grid.cime_env_ok', return_value=False), \
+             patch('taos.grid.run_cmd') as mock_run, \
+             patch('taos.grid.os.path.exists', side_effect=list(self._DEFAULT_EXISTS)), \
+             patch('pathlib.Path.write_text'):
+            with self.assertRaisesRegex(RuntimeError, 'CIME case environment'):
+                create_grid(MockConfig())
+        mock_run.assert_not_called()
 
     # ------------------------------------------------------------------
     # HOMME2SCRIP conversion

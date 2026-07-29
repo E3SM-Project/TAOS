@@ -19,7 +19,7 @@ import numpy as np
 
 from taos import sem
 from taos.config import taos_config
-from taos.util import clr, e3sm_env_prefix, print_line, run_cmd, timer
+from taos.util import clr, cime_env_ok, e3sm_env_prefix, ensure_dir, print_line, run_cmd, timer
 
 # -------------------------------------------------------------------
 # internal helpers
@@ -29,6 +29,7 @@ def _grid_paths(cfg):
     """Return a dict of all grid file paths derived from cfg."""
     grid_name = cfg['grid.name']
     grid_root = cfg['derived.grid_root']
+    ensure_dir(grid_root)  # every grid stage writes here; nothing else creates it
     homme_tool_root = cfg.get('paths.homme_tool_root', '')
     np4_name = cfg.get('grid.name_np4', grid_name + 'np4')
     pg2_name = cfg.get('grid.name_pg2', grid_name + 'pg2')
@@ -223,6 +224,12 @@ def create_grid(cfg):
         # -------------------------------------------------------------------
         # np4 SCRIP and MBDA
         if use_homme_np4:
+            if not cime_env_ok(cfg):
+                raise RuntimeError(
+                    'grid.homme_np4_scrip requires homme_tool, which needs the '
+                    'CIME case environment (get_case_env) — unavailable on this '
+                    'machine. E3SM does not support OLCF Andes; use Frontier, '
+                    'or the default Python np4 path (grid.homme_np4_scrip: false).')
             homme_tool_root = cfg['paths.homme_tool_root']
 
             # clear any stale homme_tool grid template file

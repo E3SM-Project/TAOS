@@ -31,7 +31,7 @@ import xarray as xr
 from taos.config import taos_config
 from taos.grid import create_grid
 from taos import sem
-from taos.util import clr, e3sm_env_prefix, print_line, run_cmd, timer
+from taos.util import clr, cime_env_ok, e3sm_env_prefix, ensure_dir, print_line, run_cmd, timer
 
 _GRAVITY = 9.80616
 
@@ -45,6 +45,7 @@ def _topo_paths(cfg):
     grid_root = cfg['derived.grid_root']
     topo_root = cfg['derived.topo_root']
     timestamp = cfg['project.timestamp']
+    ensure_dir(topo_root)  # every topo stage writes here; nothing else creates it
     np4_name  = cfg.get('grid.name_np4', grid_name + 'np4')
     pg2_name  = cfg.get('grid.name_pg2', grid_name + 'pg2')
     exodus_override = cfg.get('grid.grid_file_exodus', '')
@@ -128,7 +129,12 @@ def remap_topo(cfg, force_new_3km_data=False):
                 return
             sq_flag = f' --square-fields {",".join(square_fields)}' if square_fields else ''
             dof_flag = f' --dof-var {dof_var}' if dof_var else ''
+            # PNETCDF_HINTS pins the classic MPI-IO driver: PnetCDF 1.15.0's
+            # new GIO Lustre driver SIGFPEs on open (observed on OLCF Andes,
+            # July 2026 — see also tests/test_mbda.py). ${VAR:-default} keeps
+            # any user-exported PNETCDF_HINTS in effect.
             cmd = (f'{env_prefix} &&'
+                   f' PNETCDF_HINTS="${{PNETCDF_HINTS:-nc_driver=mpiio}}"'
                    f' {mbda_path}'
                    f' --target {target}'
                    f' --source {source}'
@@ -318,6 +324,12 @@ def _smooth_topo_python(cfg):
 def _smooth_topo_homme(cfg):
     """homme_tool topo_pgn_to_smoothed smoothing (requires homme_tool_root + srun)."""
     with timer.time('smooth_topo'):
+        if not cime_env_ok(cfg):
+            raise RuntimeError(
+                'homme_tool smoothing requires the CIME case environment '
+                '(get_case_env) — unavailable on this machine. E3SM does not '
+                'support OLCF Andes; use Frontier, or the Python smoother '
+                '(topo.use_python_smooth: true).')
         # -------------------------------------------------------------------
         # resolve paths
         homme_tool_root = cfg['paths.homme_tool_root']

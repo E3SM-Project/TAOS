@@ -9,13 +9,14 @@ Run with:
     python -m pytest tests/test_util.py
 """
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 import subprocess as sp
 
 
-from taos.util import e3sm_env_prefix, get_env_var, print_line, run_cmd
+from taos.util import cime_env_ok, e3sm_env_prefix, ensure_dir, get_env_var, print_line, run_cmd
 
 
 # ---------------------------------------------------------------------------
@@ -57,22 +58,89 @@ class TestRunCmd(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# ensure_dir
+
+class TestEnsureDir(unittest.TestCase):
+
+    def test_creates_nested_directories(self):
+        with tempfile.TemporaryDirectory() as d:
+            target = Path(d) / 'a/b/c'
+            ensure_dir(str(target))
+            self.assertTrue(target.is_dir())
+
+    def test_noop_on_existing_directory(self):
+        with tempfile.TemporaryDirectory() as d:
+            ensure_dir(d)  # must not raise
+            self.assertTrue(Path(d).is_dir())
+
+    def test_noop_on_empty_path(self):
+        ensure_dir('')  # must not raise or create anything
+
+
+# ---------------------------------------------------------------------------
 # e3sm_env_prefix
+
+class _EnvMockCfg:
+    def __init__(self, e3sm_src_root='/e3sm'):
+        self._cfg = {'paths.e3sm_src_root': e3sm_src_root}
+
+    def __getitem__(self, key):
+        return self._cfg[key]
+
 
 class TestE3smEnvPrefix(unittest.TestCase):
 
     def test_returns_eval_command(self):
-        cfg = {'paths.e3sm_src_root': '/e3sm'}
-
-        class MockCfg:
-            def __getitem__(self, key):
-                return cfg[key]
-
-        result = e3sm_env_prefix(MockCfg())
+        with patch('taos.util.cime_env_ok', return_value=True):
+            result = e3sm_env_prefix(_EnvMockCfg())
         self.assertEqual(
             result,
             'eval $(/e3sm/cime/CIME/Tools/get_case_env) 2>/dev/null',
         )
+
+    def test_noop_when_cime_env_unavailable(self):
+        with patch('taos.util.cime_env_ok', return_value=False):
+            self.assertEqual(e3sm_env_prefix(_EnvMockCfg()), 'true')
+
+
+# ---------------------------------------------------------------------------
+# cime_env_ok
+
+class TestCimeEnvOk(unittest.TestCase):
+
+    def test_false_when_src_root_empty(self):
+        self.assertFalse(cime_env_ok(_EnvMockCfg(e3sm_src_root='')))
+
+    def test_false_when_tool_missing(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertFalse(cime_env_ok(_EnvMockCfg(e3sm_src_root=d)))
+
+    def test_true_when_tool_produces_env(self):
+        with tempfile.TemporaryDirectory() as d:
+            tool = Path(d) / 'cime/CIME/Tools/get_case_env'
+            tool.parent.mkdir(parents=True)
+            tool.write_text('#!/bin/bash\necho "export FOO=1"\n')
+            tool.chmod(0o755)
+            self.assertTrue(cime_env_ok(_EnvMockCfg(e3sm_src_root=d)))
+
+    def test_false_when_tool_fails(self):
+        with tempfile.TemporaryDirectory() as d:
+            tool = Path(d) / 'cime/CIME/Tools/get_case_env'
+            tool.parent.mkdir(parents=True)
+            tool.write_text('#!/bin/bash\nexit 1\n')
+            tool.chmod(0o755)
+            self.assertFalse(cime_env_ok(_EnvMockCfg(e3sm_src_root=d)))
+
+    def test_result_is_cached(self):
+        with tempfile.TemporaryDirectory() as d:
+            tool = Path(d) / 'cime/CIME/Tools/get_case_env'
+            tool.parent.mkdir(parents=True)
+            tool.write_text('#!/bin/bash\necho "export FOO=1"\n')
+            tool.chmod(0o755)
+            self.assertTrue(cime_env_ok(_EnvMockCfg(e3sm_src_root=d)))
+            # second call must hit the cache, not re-probe the (now removed) tool
+            tool.unlink()
+            self.assertTrue(cime_env_ok(_EnvMockCfg(e3sm_src_root=d)))
 
 
 # ---------------------------------------------------------------------------

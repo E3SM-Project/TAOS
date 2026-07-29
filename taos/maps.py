@@ -20,7 +20,7 @@ import os
 import re
 
 from taos.config import taos_config
-from taos.util import clr, print_line, run_cmd, timer
+from taos.util import clr, ensure_dir, print_line, run_cmd, timer
 
 # -------------------------------------------------------------------
 # default remap algorithms (overridable via maps.algorithms in project.yaml
@@ -92,6 +92,7 @@ def create_maps_ocn(cfg, algorithms=None):
     ocn_grid_name = cfg['grid.ocn_name']
     ocn_grid_file = cfg['grid.ocn_file']
     maps_root     = cfg['derived.maps_root']
+    ensure_dir(maps_root)
     timestamp     = cfg['project.timestamp']
     atm_grid_file = f'{cfg["derived.grid_root"]}/{atm_grid_name}_scrip.nc'
     env_prefix    = _unified_env_prefix(cfg)
@@ -128,6 +129,7 @@ def create_maps_lnd(cfg, algorithms=None):
     lnd_grid_name = cfg['grid.lnd_name']
     lnd_grid_file = cfg['grid.lnd_file']
     maps_root     = cfg['derived.maps_root']
+    ensure_dir(maps_root)
     timestamp     = cfg['project.timestamp']
     atm_grid_file = f'{cfg["derived.grid_root"]}/{atm_grid_name}_scrip.nc'
     env_prefix    = _unified_env_prefix(cfg)
@@ -159,6 +161,7 @@ def create_maps_spa(cfg):
     spa_grid_name = cfg.get('grid.spa_name', 'ne30pg2')
     spa_grid_file = cfg['grid.spa_file']
     maps_root     = cfg['derived.maps_root']
+    ensure_dir(maps_root)
     timestamp     = cfg['project.timestamp']
     atm_grid_file = f'{cfg["derived.grid_root"]}/{atm_grid_name}_scrip.nc'
     env_prefix    = _unified_env_prefix(cfg)
