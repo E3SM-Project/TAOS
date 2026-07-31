@@ -63,6 +63,17 @@ ConvertMeshToSCRIP --in ${GRID_ROOT}/ne${NE}pg2.g --out ${GRID_ROOT}/ne${NE}pg2_
 
 ```
 
+# SPA Grid File
+
+```shell
+GRID_ROOT=$(python -m taos.config project.yaml derived.grid_root) || exit 1
+NE=30
+GenerateCSMesh --alt --res ${NE} --file ${GRID_ROOT}/ne${NE}.g
+GenerateVolumetricMesh --in ${GRID_ROOT}/ne${NE}.g --out ${GRID_ROOT}/ne${NE}pg2.g --np 2 --uniform
+ConvertMeshToSCRIP --in ${GRID_ROOT}/ne${NE}pg2.g --out ${GRID_ROOT}/ne${NE}pg2_scrip.nc
+echo ; echo ${GRID_ROOT}/ne${NE}pg2_scrip.nc ; echo
+```
+
 --------------------------------------------------------------------------------
 
 <!-- # Prerequisite Steps -->

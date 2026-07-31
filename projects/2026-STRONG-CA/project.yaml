@@ -42,8 +42,8 @@ grid:
   lnd_file: "${DIN_LOC_ROOT}/lnd/clm2/mappingdata/grids/MOSART_global_8th.scrip.20180211c.nc"
 
   # SPA grid — optional, only needed for EAMxx SPA maps (defaults to <name>pg2)
-  spa_name: ""
-  spa_file: ""
+  spa_name: "ne30pg2"
+  spa_file: "${grid_root}/ne30pg2_scrip.nc"
 
   # Use homme_tool for np4 SCRIP generation (instead of pure-Python path)
   homme_np4_scrip:  false
@@ -59,8 +59,6 @@ grids:
 
   - name: "STRONG-CA-32x5-v1"
     # grid_file_exodus: ${grid_root}/STRONG-CA-32x5-v1.g
-    ocn_name: "STRONG-CA-32x5-v1"
-    lnd_name: "STRONG-CA-32x5-v1"
   - name: "STRONG-CA-32x5-v2"
     # grid_file_exodus: ${grid_root}/STRONG-CA-32x5-v2.g
 
@@ -132,3 +130,8 @@ slurm:
   account:    ""    # set per-machine in machines: section above
   constraint: ""
   qos:        ""
+  # Shell lines injected into generated batch scripts ahead of the launch
+  # command, for machine-specific runtime settings. An empty list defers to
+  # the machine default in taos/machines.yaml (which is where these normally
+  # belong — override here only for project-specific needs).
+  job_env:    []

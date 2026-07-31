@@ -33,11 +33,11 @@ slurm_qos        = cfg.get('slurm.qos', '')
 #-------------------------------------------------------------------------------
 # step flags — set to False (or comment out) to skip a step
 
-use_batch = True  # set False to run steps directly on the current node
+use_batch = False  # set False to run steps directly on the current node
 
 do_maps   = True
-do_domain = True
-do_topo   = True
+# do_domain = True
+# do_topo   = True
 
 #-------------------------------------------------------------------------------
 # select which grids to process - use None to process all grids in project.yaml,
@@ -81,8 +81,9 @@ for grid_cfg in cfg.iter_grids():
         cmd = ''
         if locals().get('do_maps', False):
             map_args = ''
-            map_args += ' --create-maps-ocn'
-            map_args += ' --create-maps-lnd'
+            # map_args += ' --create-maps-ocn'
+            # map_args += ' --create-maps-lnd'
+            map_args += ' --create-maps-spa'
             cmd += f'python -m taos.maps {yaml_path} --grid-name {grid_name} {map_args}'
         if locals().get('do_domain', False):
             if cmd:
@@ -99,10 +100,10 @@ for grid_cfg in cfg.iter_grids():
     if locals().get('do_topo', False):
         topo_args = ''
         # topo_args += ' --stage grid'
-        topo_args += ' --stage remap'
+        # topo_args += ' --stage remap'
         # topo_args += ' --stage smooth'
         # topo_args += ' --stage sgh'
-        # topo_args += ' --stage all'
+        topo_args += ' --stage all'
         # topo_args += ' --force-new-3km-data'
 
         cmd = f'python -m taos.topo {yaml_path} --grid-name {grid_name} {topo_args}'

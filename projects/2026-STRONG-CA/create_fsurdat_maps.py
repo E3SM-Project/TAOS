@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-import os
+import os, pathlib
+from taos import taos_config
+from taos.util import check_esmf_rwg
 #---------------------------------------------------------------------------------------------------
 class clr:END,RED,GREEN,MAGENTA,CYAN = '\033[0m','\033[31m','\033[32m','\033[35m','\033[36m'
 def run_cmd(cmd): print('\n'+clr.GREEN+cmd+clr.END); os.system(cmd); return
@@ -8,7 +10,7 @@ def run_cmd(cmd): print('\n'+clr.GREEN+cmd+clr.END); os.system(cmd); return
 # python create_fsurdat_maps.py --grid_root     <grid_root> 
 #                               --dst_grid_name <dst_grid_name>
 #                               --dst_grid_file <dst_grid_file>
-#                               --datestamp     <datestamp>
+#                               --timestamp     <timestamp>
 #                               --batch_acct    <batch_acct>
 # Purpose:
 #   This script reads a HOMME grid template file and writes out a SCRIP format grid description file of the np4/GLL grid.
@@ -27,25 +29,52 @@ def run_cmd(cmd): print('\n'+clr.GREEN+cmd+clr.END); os.system(cmd); return
 # parser.add_option('--dst_file',dest='dst_file',default=None,help='Output scrip grid file')
 # (opts, args) = parser.parse_args()
 #---------------------------------------------------------------------------------------------------
-# # Make sure E3SM unified env is activated
-# E3SMU_SCRIPT = os.getenv('E3SMU_SCRIPT')
-# if E3SMU_SCRIPT is None:
-#     raise ValueError('ERROR - This tool requires the E3SM unified environement to active')
+'''
+ncremap -4 -g ${DIN_LOC_ROOT}/lnd/clm2/mappingdata/grids/SCRIPgrid_0.1x0.1_nomask_c20260731.nc \
+    -G ttl='0.1x0.1 degree global uniform latitude-longitude grid'#latlon=1800,3600#lat_typ=uni#lat_drc=s2n#lon_typ=180_wst
+
+ncremap -4 -g ${DIN_LOC_ROOT}/lnd/clm2/mappingdata/grids/SCRIPgrid_0.01x0.01_nomask_c20260731.nc \
+    -G ttl='0.01x0.01 degree global uniform latitude-longitude grid'#latlon=18000,36000#lat_typ=uni#lat_drc=s2n#lon_typ=180_wst
+'''
 #---------------------------------------------------------------------------------------------------
+# Make sure an MPI-enabled ESMF_RegridWeightGen is available before doing
+# anything else - the batch scripts below inherit this environment, so an
+# mpiuni build found here is the one that would fail on the compute nodes.
+check_esmf_rwg()
+#---------------------------------------------------------------------------------------------------
+proj_dir        = pathlib.Path(__file__).parent
+taos_cfg        = taos_config(proj_dir / 'project.yaml')
 
-allocation = 'm5277'
-datestamp  = 20260505
+timestamp       = taos_cfg.get('project.timestamp')
+host            = taos_cfg.get('machine.name')
+# unified_src     = taos_cfg.get('paths.unified_src')
+account         = taos_cfg.get('slurm.account')
+qos             = taos_cfg.get('slurm.qos')
+constraint      = taos_cfg.get('slurm.constraint')
+mail_user       = taos_cfg.get('slurm.mail_user')
+mail_type       = taos_cfg.get('slurm.mail_type')
+# machine-specific runtime settings (e.g. UCX transport tuning on OLCF) - empty
+# on machines that need none, see slurm.job_env in taos/machines.yaml
+job_env         = taos_cfg.job_env_block()
 
-proj_root = '/global/homes/w/whannah/E3SM_grid_support/projects/2026-STRONG'
+proj_root       = taos_cfg.get('derived.proj_root')
+data_root       = taos_cfg.get('derived.data_root')
+grid_root       = taos_cfg.get('derived.grid_root')
+DIN_LOC_ROOT    = taos_cfg.get('paths.DIN_LOC_ROOT')
 
-grid_root = '/global/cfs/cdirs/m5277/whannah/2026-STRONG-CA/files_grid'
-maps_root = '/global/cfs/cdirs/m5277/whannah/2026-STRONG-CA/files_fsurdat'
+output_root     = f'{data_root}/files_fsurdat'
+src_grid_root   = f'{DIN_LOC_ROOT}/lnd/clm2/mappingdata/grids'
 
-src_grid_root='/global/cfs/cdirs/e3sm/inputdata/lnd/clm2/mappingdata/grids'
+dst_grid_name   = f'STRONG-CA-32x5-v1'
+dst_grid_file   = f'{grid_root}/{dst_grid_name}pg2_scrip.nc'
 
-dst_grid_name = f'STRONG-CA-32x5-v1'
-dst_grid_file = f'{grid_root}/{dst_grid_name}-pg2_scrip.nc'
-
+#---------------------------------------------------------------------------------------------------
+if not os.path.exists(dst_grid_file): raise FileNotFoundError(f'file not found - dst_grid_file: {dst_grid_file}')
+if not os.path.exists(data_root):     raise FileNotFoundError(f'path does not exist - data_root: {data_root}')
+if not os.path.exists(grid_root):     raise FileNotFoundError(f'path does not exist - grid_root: {grid_root}')
+if not os.path.exists(DIN_LOC_ROOT):  raise FileNotFoundError(f'path does not exist - DIN_LOC_ROOT: {DIN_LOC_ROOT}')
+if not os.path.exists(src_grid_root): raise FileNotFoundError(f'path does not exist - src_grid_root: {src_grid_root}')
+os.makedirs(output_root, exist_ok=True)
 #---------------------------------------------------------------------------------------------------
 grid_opt_list = []
 def add_grid( **kwargs ):
@@ -55,76 +84,67 @@ def add_grid( **kwargs ):
 #---------------------------------------------------------------------------------------------------
 # build list of source grids
 
-std_slurm_opts = {'qos':'regular','time_limit':'1:00:00','num_nodes':1}
-# dbg_slurm_opts = {'qos':'debug',  'time_limit':'0:30:00','num_nodes':1}
-big_slurm_opts = {'qos':'regular','time_limit':'2:00:00','num_nodes':32,'cpus_per_task':16}
+# sbatch_opts => flags for the allocation, emitted on the #SBATCH line
+# srun_opts   => flags for the job step; -n is TOTAL tasks, not tasks per node.
+# Always set -n explicitly - a bare srun picks up a site-dependent default,
+# which on andes silently expanded to 32 duplicate serial ranks.
 
-add_grid(id='00', **std_slurm_opts, name='0.5x0.5_AVHRR',                       file=f'{src_grid_root}/SCRIPgrid_0.5x0.5_AVHRR_c110228.nc' )
-add_grid(id='01', **std_slurm_opts, name='0.5x0.5_MODIS',                       file=f'{src_grid_root}/SCRIPgrid_0.5x0.5_MODIS_c110228.nc' )
-add_grid(id='02', **std_slurm_opts, name='3minx3min_LandScan2004',              file=f'{src_grid_root}/SCRIPgrid_3minx3min_LandScan2004_c120517.nc' )
-add_grid(id='03', **std_slurm_opts, name='3minx3min_MODIS',                     file=f'{src_grid_root}/SCRIPgrid_3minx3min_MODIS_c110915.nc' )
-add_grid(id='04', **std_slurm_opts, name='3x3_USGS',                            file=f'{src_grid_root}/SCRIPgrid_3x3_USGS_c120912.nc' )
-add_grid(id='05', **std_slurm_opts, name='5x5min_nomask',                       file=f'{src_grid_root}/SCRIPgrid_5x5min_nomask_c110530.nc' )
-add_grid(id='06', **std_slurm_opts, name='5x5min_IGBP-GSDP',                    file=f'{src_grid_root}/SCRIPgrid_5x5min_IGBP-GSDP_c110228.nc' )
-add_grid(id='07', **std_slurm_opts, name='5x5min_ISRIC-WISE',                   file=f'{src_grid_root}/SCRIPgrid_5x5min_ISRIC-WISE_c111114.nc' )
-add_grid(id='08', **std_slurm_opts, name='10x10min_nomask',                     file=f'{src_grid_root}/SCRIPgrid_10x10min_nomask_c110228.nc' )
-add_grid(id='09', **std_slurm_opts, name='10x10min_IGBPmergeICESatGIS',         file=f'{src_grid_root}/SCRIPgrid_10x10min_IGBPmergeICESatGIS_c110818.nc' )
-add_grid(id='10', **std_slurm_opts, name='3minx3min_GLOBE-Gardner',             file=f'{src_grid_root}/SCRIPgrid_3minx3min_GLOBE-Gardner_c120922.nc' )
-add_grid(id='11', **std_slurm_opts, name='3minx3min_GLOBE-Gardner-mergeGIS',    file=f'{src_grid_root}/SCRIPgrid_3minx3min_GLOBE-Gardner-mergeGIS_c120922.nc' )
-add_grid(id='12', **std_slurm_opts, name='0.9x1.25_GRDC',                       file=f'{src_grid_root}/SCRIPgrid_0.9x1.25_GRDC_c130307.nc' )
-add_grid(id='13', **std_slurm_opts, name='360x720_cruncep',                     file=f'{src_grid_root}/SCRIPgrid_360x720_cruncep_c120830.nc' )
-add_grid(id='14', **big_slurm_opts, name='1km-merge-10min_HYDRO1K-merge-nomask',file=f'{src_grid_root}/SCRIPgrid_1km-merge-10min_HYDRO1K-merge-nomask_c20200415.nc' )
-add_grid(id='15', **std_slurm_opts, name='0.5x0.5_GSDTG2000',                   file=f'{src_grid_root}/SCRIPgrid_0.5x0.5_GSDTG2000_c240125.nc' )
-add_grid(id='16', **std_slurm_opts, name='0.1x0.1_nomask',                      file=f'{src_grid_root}/SCRIPgrid_0.1x0.1_nomask_c110712.nc' )
-add_grid(id='17', **big_slurm_opts, name='0.01x0.01_nomask',                    file=f'{src_grid_root}/SCRIPgrid_0.01x0.01_nomask_c250510.nc' )
+# std_slurm_opts = {'qos':'regular','time_limit':'1:00:00','sbatch_opts':'--nodes=1','srun_opts':'-n 1'}
+# dbg_slurm_opts = {'qos':'debug',  'time_limit':'0:30:00','sbatch_opts':'--nodes=1','srun_opts':'-n 1'}
+
+std_slurm_opts = {'time_limit':'1:00:00','sbatch_opts':'--nodes=1',                     'srun_opts':'-n 1'}
+# 32 nodes x 16 cpus-per-task => 2 tasks per node on andes' 32-core nodes
+big_slurm_opts = {'time_limit':'2:00:00','sbatch_opts':'--nodes=32 --cpus-per-task=16','srun_opts':'-n 64'}
+
+# add_grid(id='00', **std_slurm_opts, name='0.5x0.5_AVHRR',                       file=f'{src_grid_root}/SCRIPgrid_0.5x0.5_AVHRR_c110228.nc' )
+# add_grid(id='01', **std_slurm_opts, name='0.5x0.5_MODIS',                       file=f'{src_grid_root}/SCRIPgrid_0.5x0.5_MODIS_c110228.nc' )
+# add_grid(id='02', **std_slurm_opts, name='3minx3min_LandScan2004',              file=f'{src_grid_root}/SCRIPgrid_3minx3min_LandScan2004_c120517.nc' )
+# add_grid(id='03', **std_slurm_opts, name='3minx3min_MODIS',                     file=f'{src_grid_root}/SCRIPgrid_3minx3min_MODIS_c110915.nc' )
+# add_grid(id='04', **std_slurm_opts, name='3x3_USGS',                            file=f'{src_grid_root}/SCRIPgrid_3x3_USGS_c120912.nc' )
+# add_grid(id='05', **std_slurm_opts, name='5x5min_nomask',                       file=f'{src_grid_root}/SCRIPgrid_5x5min_nomask_c110530.nc' )
+# add_grid(id='06', **std_slurm_opts, name='5x5min_IGBP-GSDP',                    file=f'{src_grid_root}/SCRIPgrid_5x5min_IGBP-GSDP_c110228.nc' )
+# add_grid(id='07', **std_slurm_opts, name='5x5min_ISRIC-WISE',                   file=f'{src_grid_root}/SCRIPgrid_5x5min_ISRIC-WISE_c111114.nc' )
+# add_grid(id='08', **std_slurm_opts, name='10x10min_nomask',                     file=f'{src_grid_root}/SCRIPgrid_10x10min_nomask_c110228.nc' )
+# add_grid(id='09', **std_slurm_opts, name='10x10min_IGBPmergeICESatGIS',         file=f'{src_grid_root}/SCRIPgrid_10x10min_IGBPmergeICESatGIS_c110818.nc' )
+# add_grid(id='10', **std_slurm_opts, name='3minx3min_GLOBE-Gardner',             file=f'{src_grid_root}/SCRIPgrid_3minx3min_GLOBE-Gardner_c120922.nc' )
+# add_grid(id='11', **std_slurm_opts, name='3minx3min_GLOBE-Gardner-mergeGIS',    file=f'{src_grid_root}/SCRIPgrid_3minx3min_GLOBE-Gardner-mergeGIS_c120922.nc' )
+# add_grid(id='12', **std_slurm_opts, name='0.9x1.25_GRDC',                       file=f'{src_grid_root}/SCRIPgrid_0.9x1.25_GRDC_c130307.nc' )
+# add_grid(id='13', **std_slurm_opts, name='360x720_cruncep',                     file=f'{src_grid_root}/SCRIPgrid_360x720_cruncep_c120830.nc' )
+# add_grid(id='14', **big_slurm_opts, name='1km-merge-10min_HYDRO1K-merge-nomask',file=f'{src_grid_root}/SCRIPgrid_1km-merge-10min_HYDRO1K-merge-nomask_c20200415.nc' )
+# add_grid(id='15', **std_slurm_opts, name='0.5x0.5_GSDTG2000',                   file=f'{src_grid_root}/SCRIPgrid_0.5x0.5_GSDTG2000_c240125.nc' )
+add_grid(id='16', **std_slurm_opts, name='0.1x0.1_nomask',                      file=f'{src_grid_root}/SCRIPgrid_0.1x0.1_nomask_c20260731.nc' )
+add_grid(id='17', **big_slurm_opts, name='0.01x0.01_nomask',                    file=f'{src_grid_root}/SCRIPgrid_0.01x0.01_nomask_c20260731.nc' )
+
+# add_grid(id='16', **std_slurm_opts, name='0.1x0.1_nomask',                      file=f'{src_grid_root}/SCRIPgrid_0.1x0.1_nomask_c110712.nc' )
+# add_grid(id='17', **big_slurm_opts, name='0.01x0.01_nomask',                    file=f'{src_grid_root}/SCRIPgrid_0.01x0.01_nomask_c250510.nc' )
 
 #---------------------------------------------------------------------------------------------------
-def get_host():
-    host = None
-    if os.path.exists('/global/cfs'): host = 'nersc'
-    if os.path.exists('/lcrc')      : host = 'lcrc'
-    if host is None: raise ValueError('ERROR: supported host not found')
-    return host
-#---------------------------------------------------------------------------------------------------
-def get_unified_source():
-    host = get_host()
-    unified_source = None
-    if host=='nersc': unified_source = '/global/common/software/e3sm/anaconda_envs/load_latest_e3sm_unified_pm-cpu.sh'
-    if host=='lcrc' : unified_source = '/lcrc/soft/climate/e3sm-unified/load_latest_e3sm_unified_chrysalis.sh'
-    if unified_source is None: raise ValueError('ERROR: path for E3SM unified environment not found')
-    return unified_source
-#---------------------------------------------------------------------------------------------------
-def get_batch_script_text( opts ):
-    global allocation, maps_root, dst_grid_name, dst_grid_file
-    src_grid_id   = opts['id']
+def get_batch_script_text( opts, tmp_root ):
+    global account, output_root, dst_grid_name, dst_grid_file
     src_grid_file = opts['file']
     src_grid_name = opts['name']
-    map_file = f'{maps_root}/map_{src_grid_name}_to_{dst_grid_name}_nomask_aave_da_{datestamp}.nc'
+    map_file = f'{output_root}/map_{src_grid_name}_to_{dst_grid_name}_nomask_aave_da_{timestamp}.nc'
     # map_opts = f'-m conserve --ignore_unmapped --src_type SCRIP --dst_type SCRIP --64bit_offset'
     map_opts = f'-m conserve --ignore_unmapped --src_type SCRIP --dst_type SCRIP --netcdf4'
-    # create to a dedicated tmp directory for each grid to avoid overwriting logs and temp files
-    tmp_root = f'{maps_root}/esmf_tmp_{src_grid_id}'
-    os.makedirs(tmp_root, exist_ok=True)
     # allow grids to override slurm job defaults
-    qos                 = opts.get('qos',                   'regular')
+    # qos                 = opts.get('qos',                   'regular')
     time_limit          = opts.get('time_limit',            '01:00:00')
-    num_nodes           = opts.get('num_nodes',             1)
-    cpus_per_task       = opts.get('cpus_per_task',         1)
-    # num_tasks_per_node  = opts.get('num_tasks_per_node',    64)
+    sbatch_opts         = opts.get('sbatch_opts',           '--nodes=1')
+    srun_opts           = opts.get('srun_opts',             '-n 1')
+    slurm_mach_specific_opts = ''
+    slurm_mach_specific_opts += (f'\n#SBATCH --qos={qos}'                if qos is not None else '')
+    slurm_mach_specific_opts += (f'\n#SBATCH --constraint={constraint}'  if constraint is not None else '')
     return f'''#!/bin/sh
-#SBATCH --account={allocation}
-#SBATCH --constraint=cpu
-#SBATCH --qos={qos}
+#SBATCH --account={account} {slurm_mach_specific_opts}
 #SBATCH --output={proj_root}/logs_slurm/slurm-%x-%j.out
 #SBATCH --time={time_limit}
-#SBATCH --nodes={num_nodes}
-#SBATCH --cpus-per-task={cpus_per_task}
-#SBATCH --mail-type=END,FAIL
+#SBATCH {sbatch_opts}
+#SBATCH --mail-user={mail_user}
+#SBATCH --mail-type={mail_type}
 cd {tmp_root}
-source {get_unified_source()}
-srun ESMF_RegridWeightGen {map_opts} -s {src_grid_file} -d {dst_grid_file}  -w {map_file} 
+{job_env}srun {srun_opts} ESMF_RegridWeightGen {map_opts} -s {src_grid_file} -d {dst_grid_file}  -w {map_file}
 '''
-# --ntasks=64
+# source {unified_src}
 #---------------------------------------------------------------------------------------------------
 def human_readable_size(path):
     size = os.path.getsize(path)
@@ -148,14 +168,18 @@ for n,opts in enumerate(grid_opt_list):
     src_grid_id   = opts['id']
     # src_grid_name = opts['name']
     # src_grid_file = opts['file']
-    # map_file = f'{maps_root}/map_{src_grid_name}_to_{dst_grid_name}_nomask_aave_da_{datestamp}.nc'
+    # map_file = f'{output_root}/map_{src_grid_name}_to_{dst_grid_name}_nomask_aave_da_{timestamp}.nc'
     # map_opts = f'-m conserve --ignore_unmapped --src_type SCRIP --dst_type SCRIP --64bit_offset'
     #-----------------------------------------------------------------------------
+    # create to a dedicated tmp directory for each grid to avoid overwriting logs and temp files
+    tmp_root = f'{output_root}/esmf_tmp_{src_grid_id}'
+    os.makedirs(tmp_root, exist_ok=True)
+    batch_script_text = get_batch_script_text(opts,tmp_root)
+    #-----------------------------------------------------------------------------
     # Write the batch script
-    batch_script_path = f'{maps_root}/generate_fsurdat_map_{dst_grid_name}_{src_grid_id}.sh'
+    batch_script_path = f'{output_root}/generate_fsurdat_map_{dst_grid_name}_{src_grid_id}.sh'
     file = open(batch_script_path,'w')
-    # file.write(get_batch_script_text(map_opts,src_grid_file,dst_grid_file,map_file))
-    file.write(get_batch_script_text(opts))
+    file.write(batch_script_text)
     file.close()
     #-----------------------------------------------------------------------------
     # Submit the batch job
