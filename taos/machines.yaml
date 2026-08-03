@@ -13,6 +13,15 @@
 # detection.probe_path: a path that exists only on that machine, used for
 # auto-detection. Checked in document order; last match wins (mirrors the
 # bash if-chain in set_machine_paths.sh).
+#
+# slurm.job_env: shell lines injected verbatim into generated batch scripts,
+# just ahead of the launch command. Use for machine-specific runtime settings
+# that have no portable equivalent (e.g. UCX transport tuning, which applies
+# only to InfiniBand/OpenMPI machines and is silently ignored elsewhere).
+# Emit them with taos_config.job_env_block(). Note that any $VAR already set on
+# the submitting host is expanded at config-load time, not on the compute node
+# (a $VAR unset at load time passes through literally and is expanded by the
+# job). There is no escape for this, so prefer literal values here.
 # ==============================================================================
 
 # Keys listed here are checked by SwagConfig.validate() when no explicit
@@ -51,6 +60,7 @@ LCRC:
     account:    "e3sm"
     constraint: ""
     qos:        "regular"
+    job_env:    []   # add UCX settings here if chrysalis MPI turns out to use UCX
 
 # ------------------------------------------------------------------------------
 NERSC:
@@ -73,6 +83,7 @@ NERSC:
     account:    "e3sm"
     constraint: "cpu"
     qos:        "regular"
+    job_env:    []   # cray-mpich/libfabric — no UCX in the stack
 
 # ------------------------------------------------------------------------------
 ALCF:
@@ -94,6 +105,7 @@ ALCF:
     account:    "E3SM_Dec"
     constraint: ""
     qos:        ""
+    job_env:    []   # mpich/libfabric — no UCX in the stack
 
 # ------------------------------------------------------------------------------
 OLCF:
@@ -115,3 +127,6 @@ OLCF:
     account:    "cli115"
     constraint: ""
     qos:        ""
+    job_env:
+      - "export UCX_TLS=^dc"          # DC transport SIGBUSes in MPI_Finalize on andes
+      - "export UCX_LOG_LEVEL=error"  # suppress ibv_query_port_speed warning flood

@@ -12,6 +12,13 @@ Usage
     mbda_path = cfg['paths.mbda_path']
     print(cfg.machine)                      # e.g. "NERSC"
 
+The same values are available from the command line, which is handy in shell
+scripts and batch job wrappers:
+
+    python -m taos.config project.yaml derived.grid_root   # bare value
+    python -m taos.config project.yaml derived             # all keys in a section
+    python -m taos.config project.yaml                     # every key = value
+
 Key design
 ----------
 - A single project.yaml holds all project-specific settings plus optional
@@ -46,6 +53,9 @@ def _is_blank(val) -> bool:
         return True
     if isinstance(val, str) and val.strip() in _BLANK_VALUES:
         return True
+    # An empty list/dict defers to the machine default, mirroring "" for scalars
+    if isinstance(val, (list, tuple, dict)) and len(val) == 0:
+        return True
     return False
 
 
@@ -58,6 +68,18 @@ def _expand(obj):
     if isinstance(obj, list):
         return [_expand(v) for v in obj]
     return obj
+
+
+def _coerce_override(val):
+    """Prepare a machines:/users: override value for storage.
+
+    Scalars are stringified and env-expanded (matching the treatment the
+    base sections get from _expand); lists are preserved as lists so that
+    list-valued settings such as slurm.job_env survive an override intact.
+    """
+    if isinstance(val, (list, tuple)):
+        return [_coerce_override(v) for v in val]
+    return os.path.expandvars(os.path.expanduser(str(val)))
 
 
 def _read_cime_mail_user() -> str:
@@ -178,10 +200,10 @@ class taos_config:
         if _mach_section:
             for k, v in (_mach_section.get('paths') or {}).items():
                 if not _is_blank(v):
-                    self.paths[k] = os.path.expandvars(os.path.expanduser(str(v)))
+                    self.paths[k] = _coerce_override(v)
             for k, v in (_mach_section.get('slurm') or {}).items():
                 if not _is_blank(v):
-                    self.slurm[k] = str(v)
+                    self.slurm[k] = _coerce_override(v)
 
         # Apply per-user path/slurm overrides from users: section
         _current_user = os.environ.get('USER', '')
@@ -189,10 +211,10 @@ class taos_config:
         if _user_section:
             for k, v in (_user_section.get('paths') or {}).items():
                 if not _is_blank(v):
-                    self.paths[k] = os.path.expandvars(os.path.expanduser(str(v)))
+                    self.paths[k] = _coerce_override(v)
             for k, v in (_user_section.get('slurm') or {}).items():
                 if not _is_blank(v):
-                    self.slurm[k] = str(v)
+                    self.slurm[k] = _coerce_override(v)
 
         # Post-process: derive homme_tool_root if not explicitly set
         if _is_blank(self.paths.get('homme_tool_root')):
@@ -310,6 +332,25 @@ class taos_config:
         """Like __getitem__ but returns default instead of raising."""
         val = self._get_by_dot(dot_key)
         return default if _is_blank(val) else val
+
+    def job_env_block(self, indent: str = '') -> str:
+        """Return the machine's batch-script environment lines as script text.
+
+        Emits the ``slurm.job_env`` list (from machines.yaml, or overridden in
+        project.yaml) for injection into generated batch scripts, e.g. UCX
+        transport settings needed only on InfiniBand machines.
+
+        Returns '' when no lines are defined, and otherwise a block ending in
+        a newline, so a batch-script f-string can place ``{job_env}`` directly
+        ahead of the launch command without leaving a stray blank line on
+        machines that need nothing.
+        """
+        lines = self.get('slurm.job_env', []) or []
+        if isinstance(lines, str):
+            lines = [lines]
+        if not lines:
+            return ''
+        return ''.join(f'{indent}{ln}\n' for ln in lines)
 
     def _get_by_dot(self, dot_key: str):
         section, _, rest = dot_key.partition('.')
@@ -488,3 +529,80 @@ class taos_config:
             'slurm_log_root':  str(self.proj_dir / 'logs_batch'),
             'hiccup_log_root': str(self.proj_dir / 'logs_hiccup'),
         }
+
+
+# ------------------------------------------------------------------
+# entry point
+
+# Sections recognized by taos_config._get_by_dot(), in print order
+_SECTIONS = ['machine', 'project', 'paths', 'slurm', 'grid', 'topo', 'maps', 'derived']
+
+
+def _iter_flat(val, prefix=''):
+    """Yield (dot_key, value) pairs for every scalar reachable from *val*."""
+    if isinstance(val, dict):
+        for key, sub in val.items():
+            yield from _iter_flat(sub, f'{prefix}.{key}' if prefix else key)
+    else:
+        yield prefix, '' if val is None else val
+
+
+if __name__ == '__main__':
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(
+        description='Print resolved TAOS config values (for use in shell scripts).',
+        epilog='example:  grid_root=$(python -m taos.config project.yaml derived.grid_root)')
+    parser.add_argument('project_yaml', help='Path to project.yaml')
+    parser.add_argument('key', nargs='?', default=None,
+                        help='Dot-notation key, e.g. derived.grid_root (a section name '
+                             'like "derived" prints all of its keys; omit to print everything)')
+    parser.add_argument('--grid-name', default=None,
+                        help='Grid name to query (selects from grids: list; default: base grid:)')
+    args = parser.parse_args()
+
+    try:
+        cfg = taos_config(args.project_yaml)
+        if args.grid_name:
+            cfg = cfg.for_grid(args.grid_name)
+    except (FileNotFoundError, taos_config_error) as e:
+        print(f'ERROR: {e}', file=sys.stderr)
+        sys.exit(1)
+    except KeyError as e:
+        print(f'ERROR: {e.args[0]}', file=sys.stderr)
+        sys.exit(1)
+
+    # Without --grid-name the grid: section is the base entry, whose values are
+    # often blank because the real ones live in the grids: list — say so on
+    # stderr rather than silently reporting an empty grid.name.
+    grid_hint = ''
+    if not args.grid_name:
+        names = [v.grid.get('name') for v in cfg.iter_grids() if v.grid.get('name')]
+        if names:
+            grid_hint = ('NOTE: showing the base grid: section — use --grid-name to '
+                         f'select one of: {", ".join(names)}')
+
+    if args.key is None:
+        # No key given — dump every section so keys are discoverable.
+        # (taos.check_config prints the same values in a prettier form.)
+        for section in _SECTIONS:
+            for key, val in _iter_flat(cfg._get_by_dot(section), section):
+                print(f'{key} = {val}')
+        if grid_hint:
+            print(grid_hint, file=sys.stderr)
+        sys.exit(0)
+
+    value = cfg.get(args.key)
+    if value is None:
+        print(f"ERROR: config key '{args.key}' is not set or empty.", file=sys.stderr)
+        if grid_hint and args.key.startswith('grid'):
+            print(grid_hint, file=sys.stderr)
+        sys.exit(1)
+
+    if isinstance(value, dict):
+        for key, val in _iter_flat(value, args.key):
+            print(f'{key} = {val}')
+    else:
+        # bare value so it can be captured directly in a shell variable
+        print(value)
