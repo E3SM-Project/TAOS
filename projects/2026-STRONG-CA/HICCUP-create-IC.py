@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # ==================================================================================================
 '''NOTES
-YR=2023; python -u get_hindcast_data.NOAA_SSTICE.py --start-year=${YR} --output-root=/global/cfs/projectdirs/m4842/whannah/HICCUP
-
-DATE=20230613; HR=19
+DATE=20220727; HR=00
 OUT_ROOT=/lustre/orion/cli115/proj-shared/hannah6/TAOS/2026-STRONG-CA/files_init
 LOG_FILE=~/TAOS/projects/2026-STRONG-CA/logs_hiccup/log.hiccup.get_hindcast_data.${DATE}.${HR}
+
 nohup python -u ~/HICCUP/get_hindcast_data.ERA5.py --start-date=${DATE} --start-hour=${HR} --output-root=${OUT_ROOT} > ${LOG_FILE} &
 
+YR=2022; python -u ~/HICCUP/get_hindcast_data.NOAA_SSTICE.py --start-year=${YR} --output-root=${OUT_ROOT}
 
 '''
 # ==================================================================================================
@@ -43,7 +43,7 @@ combine_files   = True    # combine temporary data files and delete
 # create_sst_data = True    # sst/sea ice file creation
 # ------------------------------------------------------------------------------
 
-init_date = '2023-06-13'
+init_date = '2022-07-27' # target => 2022-09-06
 init_hour = '00'
 
 # Specify output atmosphere horizontal grid
@@ -55,14 +55,14 @@ dst_vert_grid,vert_file_name = 'L128',os.getenv('HOME')+'/HICCUP/files_vert/vert
 # specify date of data (and separately specify year for SST/ice files)
 init_year = int(init_date.split('-')[0])
 
-# Specify output file names
-data_root   = '/lustre/orion/cli115/proj-shared/hannah6/TAOS/2026-STRONG-CA/files_topo'
-output_root = f'{data_root}/files_init'
-topo_root   = f'{data_root}/files_topo'
+# Specify output file paths and names
+proj_root = '/lustre/orion/cli115/proj-shared/hannah6/TAOS/2026-STRONG-CA'
+data_root = f'{proj_root}/files_init'
+topo_root = f'{proj_root}/files_topo'
 
-if not os.path.exists(output_root): os.mkdir(output_root)
-output_atm_file_name = f'{output_root}/HICCUP.atm_era5.{init_date}.{init_hour}.{dst_horz_grid}.{dst_vert_grid}.nc'
-output_sst_file_name = f'{output_root}/HICCUP.sst_noaa.{init_year}.nc'
+if not os.path.exists(data_root): os.mkdir(data_root)
+output_atm_file_name = f'{data_root}/HICCUP.atm_era5.{init_date}.{init_hour}.{dst_horz_grid}.{dst_vert_grid}.nc'
+output_sst_file_name = f'{data_root}/HICCUP.sst_noaa.{init_year}.nc'
 
 # Specify topo file
 if dst_horz_grid=='strong-CA-32x5-v1': grid_id='32x5-v1'; topo_file_name=f'{topo_root}/USGS-topo_STRONG-CA-32x5-v1-np4_smoothedx6t_20260505.nc'
@@ -79,10 +79,10 @@ hiccup_data = hiccup.create_hiccup_data(src_data_name='ERA5',target_model='EAMXX
                                         sst_file=f'{data_root}/sst.day.mean.{init_year}.nc',
                                         ice_file=f'{data_root}/icec.day.mean.{init_year}.nc',
                                         topo_file=topo_file_name,
-                                        output_dir=output_root,
-                                        grid_dir=f'{output_root}/files_grid',
-                                        map_dir=f'{output_root}/files_map',
-                                        tmp_dir=f'{output_root}/files_tmp',
+                                        output_dir=data_root,
+                                        grid_dir=f'{data_root}/files_grid',
+                                        map_dir=f'{data_root}/files_map',
+                                        tmp_dir=f'{data_root}/files_tmp',
                                         verbose=verbose,
                                         check_input_files=True,)
 

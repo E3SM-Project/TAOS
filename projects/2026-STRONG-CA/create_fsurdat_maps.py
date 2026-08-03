@@ -96,7 +96,8 @@ std_slurm_opts = {'time_limit':'1:00:00','sbatch_opts':'--nodes=1',             
 # 32 nodes x 16 cpus-per-task => 2 tasks per node on andes' 32-core nodes
 # big_slurm_opts = {'time_limit':'2:00:00','sbatch_opts':'--nodes=32 --cpus-per-task=16','srun_opts':'-n 64'}
 # 48 nodes x 16 cpus-per-task => 2 tasks per node on andes' 32-core nodes
-big_slurm_opts = {'time_limit':'2:00:00','sbatch_opts':'--nodes=48 --cpus-per-task=16','srun_opts':'-n 96'}
+# big_slurm_opts = {'time_limit':'4:00:00','sbatch_opts':'--nodes=48 --cpus-per-task=16','srun_opts':'-n 96'}
+big_slurm_opts = {'time_limit':'12:00:00','sbatch_opts':'--nodes=64 --cpus-per-task=16','srun_opts':'-n 128'}
 
 # add_grid(id='00', **std_slurm_opts, name='0.5x0.5_AVHRR',                       file=f'{src_grid_root}/SCRIPgrid_0.5x0.5_AVHRR_c110228.nc' )
 # add_grid(id='01', **std_slurm_opts, name='0.5x0.5_MODIS',                       file=f'{src_grid_root}/SCRIPgrid_0.5x0.5_MODIS_c110228.nc' )
