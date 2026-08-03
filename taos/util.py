@@ -3,6 +3,8 @@
 taos.util — Shared utilities for TAOS workflow scripts.
 """
 import os
+import re
+import shutil
 import subprocess as sp
 import sys
 from contextlib import contextmanager
@@ -73,6 +75,87 @@ def cime_env_ok(cfg):
                   f' tools (mbda, TempestRemap, NCO) do not need it.{clr.END}')
         _cime_env_cache[tool] = ok
     return _cime_env_cache[tool]
+
+
+def esmf_comm(exe):
+    """Return the MPI backend ESMF was built with, or '' if undetermined.
+
+    ESMF records this as ``ESMF_COMM`` in esmf.mk — 'mpiuni' means the serial
+    stub (no real MPI), anything else ('mpich', 'openmpi', 'intelmpi', ...)
+    means a genuine MPI build. esmf.mk is located via $ESMFMKFILE, which conda
+    activation sets, falling back to <prefix>/lib/esmf.mk next to the binary.
+
+    When esmf.mk cannot be found, falls back to checking whether the binary
+    links an MPI library. That fallback can only confirm MPI, never rule it
+    out (a statically linked build shows no libmpi), so it returns '' rather
+    than 'mpiuni' when it finds nothing.
+    """
+    mk = os.environ.get('ESMFMKFILE', '')
+    if not (mk and os.path.exists(mk)):
+        mk = os.path.join(os.path.dirname(os.path.dirname(exe)), 'lib', 'esmf.mk')
+    if os.path.exists(mk):
+        try:
+            text = open(mk).read()
+        except OSError:
+            text = ''
+        # the '# ESMF_COMM: <value>' summary comment, else the -D compile flag
+        for pattern in (r'^#\s*ESMF_COMM:\s*(\S+)', r'-DESMF_COMM=(\w+)'):
+            match = re.search(pattern, text, re.MULTILINE)
+            if match:
+                return match.group(1)
+    # esmf.mk unavailable - MPI libs in the link line still prove a real build
+    try:
+        ldd = sp.run(['ldd', exe], capture_output=True, text=True, timeout=30)
+        if re.search(r'\blibmpi\w*\.so', ldd.stdout):
+            return 'mpi (from ldd)'
+    except (OSError, sp.SubprocessError):
+        pass
+    return ''
+
+
+def check_esmf_rwg(quiet=False):
+    """Verify ESMF_RegridWeightGen is on PATH and built with real MPI.
+
+    Returns the resolved path to the tool. Raises RuntimeError if it is
+    missing, or if ESMF was built with ESMF_COMM=mpiuni — the serial stub,
+    which makes every rank of a parallel launch run the same serial regrid
+    in the same directory, racing on ESMF's .esmf.nc temp mesh file and
+    dying with a confusing NetCDF "Unable to open existing file" error.
+
+    Prints a warning but does not raise when the build cannot be identified,
+    since a false block is worse than an unverified pass.
+
+    Worth running before generating batch scripts: sbatch exports the current
+    environment by default, so the ESMF found here is the one the job uses.
+    """
+    exe = shutil.which('ESMF_RegridWeightGen')
+    if exe is None:
+        raise RuntimeError(
+            'ESMF_RegridWeightGen not found on $PATH.\n'
+            '  Activate an environment providing an MPI-enabled ESMF, e.g.\n'
+            '  the E3SM unified environment or a conda env built with\n'
+            "  'esmf=*=mpi_*' (the 'nompi_*' builds will not work).")
+
+    comm = esmf_comm(exe)
+    if comm == 'mpiuni':
+        raise RuntimeError(
+            f'ESMF_RegridWeightGen is built without MPI (ESMF_COMM=mpiuni).\n'
+            f'  {exe}\n'
+            '  This build ignores the rank count and runs serially, so a\n'
+            '  parallel launch produces N identical serial jobs that corrupt\n'
+            "  each other's temp files. Install or load an ESMF built with\n"
+            "  real MPI (conda: 'esmf=*=mpi_*', not 'nompi_*').")
+
+    if not comm:
+        print(f'\n  {clr.YELLOW}NOTE: could not determine the MPI backend of'
+              f'\n  {exe}'
+              f'\n  (no esmf.mk found via $ESMFMKFILE or ../lib, and no MPI'
+              f' library in its link line).'
+              f'\n  Proceeding, but verify it is not an mpiuni build.{clr.END}')
+    elif not quiet:
+        print(f'  {clr.GREEN}ESMF_RegridWeightGen{clr.END}  '
+              f'[ESMF_COMM={comm}]  {clr.CYAN}{exe}{clr.END}')
+    return exe
 
 
 def e3sm_env_prefix(cfg):

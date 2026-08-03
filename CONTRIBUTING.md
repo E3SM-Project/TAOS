@@ -37,6 +37,25 @@ python check_paths.py    # color-coded check of which paths exist on disk
 python check_grids.py    # color-coded check of grid/topo/map file existence
 ```
 
+## Reading Config Values From the Shell
+
+`taos.config` has a CLI for pulling a single resolved value out of a
+`project.yaml`, which is useful in shell scripts and batch job wrappers:
+
+```shell
+python -m taos.config project.yaml derived.grid_root      # bare value on stdout
+python -m taos.config project.yaml derived                # all keys in a section
+python -m taos.config project.yaml                        # every key = value
+python -m taos.config project.yaml grid.ne --grid-name my-grid-v1
+```
+
+The single-key form prints nothing but the value, so it can be captured
+directly, and exits 1 if the key is unset:
+
+```shell
+grid_root=$(python -m taos.config project.yaml derived.grid_root) || exit 1
+```
+
 ## Architecture
 
 ### `taos/` Package
