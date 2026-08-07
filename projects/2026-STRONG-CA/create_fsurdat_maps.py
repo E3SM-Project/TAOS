@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-import os, pathlib
+import os, pathlib, taos
 from taos import taos_config
-from taos.util import check_esmf_rwg
 #---------------------------------------------------------------------------------------------------
 class clr:END,RED,GREEN,MAGENTA,CYAN = '\033[0m','\033[31m','\033[32m','\033[35m','\033[36m'
 def run_cmd(cmd): print('\n'+clr.GREEN+cmd+clr.END); os.system(cmd); return
@@ -37,17 +36,18 @@ ncremap -4 -g ${DIN_LOC_ROOT}/lnd/clm2/mappingdata/grids/SCRIPgrid_0.01x0.01_nom
     -G ttl='0.01x0.01 degree global uniform latitude-longitude grid'#latlon=18000,36000#lat_typ=uni#lat_drc=s2n#lon_typ=180_wst
 '''
 #---------------------------------------------------------------------------------------------------
-# Make sure an MPI-enabled ESMF_RegridWeightGen is available before doing
-# anything else - the batch scripts below inherit this environment, so an
-# mpiuni build found here is the one that would fail on the compute nodes.
-check_esmf_rwg()
+# The ESMF check runs inside the batch script rather than here, because the
+# job no longer inherits this environment - it sources unified_src, and that
+# loader picks a different environment on a compute node than on a login node
+# (nompi/mpiuni here, MPI-enabled there, keyed off $SLURM_JOB_ID). Checking
+# from a login node would therefore reject a job that is going to be fine.
 #---------------------------------------------------------------------------------------------------
 proj_dir        = pathlib.Path(__file__).parent
 taos_cfg        = taos_config(proj_dir / 'project.yaml')
 
 timestamp       = taos_cfg.get('project.timestamp')
 host            = taos_cfg.get('machine.name')
-# unified_src     = taos_cfg.get('paths.unified_src')
+unified_src     = taos_cfg.get('paths.unified_src')
 account         = taos_cfg.get('slurm.account')
 qos             = taos_cfg.get('slurm.qos')
 constraint      = taos_cfg.get('slurm.constraint')
@@ -56,6 +56,11 @@ mail_type       = taos_cfg.get('slurm.mail_type')
 # machine-specific runtime settings (e.g. UCX transport tuning on OLCF) - empty
 # on machines that need none, see slurm.job_env in taos/machines.yaml
 job_env         = taos_cfg.job_env_block()
+
+# repo root, so the batch job can import taos.util under whatever python the
+# environment it sources provides - taos.util is stdlib-only, so no install
+# into that environment is needed
+taos_root       = pathlib.Path(taos.__file__).parent.parent
 
 proj_root       = taos_cfg.get('derived.proj_root')
 data_root       = taos_cfg.get('derived.data_root')
@@ -91,15 +96,19 @@ def add_grid( **kwargs ):
 
 # std_slurm_opts = {'qos':'regular','time_limit':'1:00:00','sbatch_opts':'--nodes=1','srun_opts':'-n 1'}
 # dbg_slurm_opts = {'qos':'debug',  'time_limit':'0:30:00','sbatch_opts':'--nodes=1','srun_opts':'-n 1'}
+# big_slurm_opts = {'qos':'regular','time_limit':'2:00:00','sbatch_opts':'--nodes=16 --cpus-per-task=64','srun_opts':'-n 64'}
+# xxl_slurm_opts = {'qos':'regular','time_limit':'2:00:00','sbatch_opts':'--nodes=32 --cpus-per-task=64','srun_opts':'-n 128'}
+xxl_slurm_opts = {'qos':'regular','time_limit':'2:00:00','sbatch_opts':'--nodes=64 --cpus-per-task=64','srun_opts':'-n 256'}
 
-std_slurm_opts = {'time_limit':'1:00:00','sbatch_opts':'--nodes=1',                     'srun_opts':'-n 1'}
-# 32 nodes x 16 cpus-per-task => 2 tasks per node on andes' 32-core nodes
-# big_slurm_opts = {'time_limit':'2:00:00','sbatch_opts':'--nodes=32 --cpus-per-task=16','srun_opts':'-n 64'}
-# 48 nodes x 16 cpus-per-task => 2 tasks per node on andes' 32-core nodes
-# big_slurm_opts = {'time_limit':'4:00:00','sbatch_opts':'--nodes=48 --cpus-per-task=16','srun_opts':'-n 96'}
-big_slurm_opts = {'time_limit':'12:00:00','sbatch_opts':'--nodes=64 --cpus-per-task=16','srun_opts':'-n 128'}
-# xxl_slurm_opts = {'time_limit':'4:00:00','sbatch_opts':'--nodes=256 --cpus-per-task=32','srun_opts':'-n 256'} # one task per node on OLCF Andes
-xxl_slurm_opts = {'time_limit':'12:00:00','sbatch_opts':'--nodes=256 --cpus-per-task=32','srun_opts':'-n 256'} # one task per node on OLCF Andes
+### OLCF
+# std_slurm_opts = {'time_limit':'1:00:00','sbatch_opts':'--nodes=1',                     'srun_opts':'-n 1'}
+# # 32 nodes x 16 cpus-per-task => 2 tasks per node on andes' 32-core nodes
+# # big_slurm_opts = {'time_limit':'2:00:00','sbatch_opts':'--nodes=32 --cpus-per-task=16','srun_opts':'-n 64'}
+# # 48 nodes x 16 cpus-per-task => 2 tasks per node on andes' 32-core nodes
+# # big_slurm_opts = {'time_limit':'4:00:00','sbatch_opts':'--nodes=48 --cpus-per-task=16','srun_opts':'-n 96'}
+# big_slurm_opts = {'time_limit':'12:00:00','sbatch_opts':'--nodes=64 --cpus-per-task=16','srun_opts':'-n 128'}
+# # xxl_slurm_opts = {'time_limit':'4:00:00','sbatch_opts':'--nodes=256 --cpus-per-task=32','srun_opts':'-n 256'} # one task per node on OLCF Andes
+# xxl_slurm_opts = {'time_limit':'12:00:00','sbatch_opts':'--nodes=256 --cpus-per-task=32','srun_opts':'-n 256'} # one task per node on OLCF Andes
 
 # add_grid(id='00', **std_slurm_opts, name='0.5x0.5_AVHRR',                       file=f'{src_grid_root}/SCRIPgrid_0.5x0.5_AVHRR_c110228.nc' )
 # add_grid(id='01', **std_slurm_opts, name='0.5x0.5_MODIS',                       file=f'{src_grid_root}/SCRIPgrid_0.5x0.5_MODIS_c110228.nc' )
@@ -115,13 +124,14 @@ xxl_slurm_opts = {'time_limit':'12:00:00','sbatch_opts':'--nodes=256 --cpus-per-
 # add_grid(id='11', **std_slurm_opts, name='3minx3min_GLOBE-Gardner-mergeGIS',    file=f'{src_grid_root}/SCRIPgrid_3minx3min_GLOBE-Gardner-mergeGIS_c120922.nc' )
 # add_grid(id='12', **std_slurm_opts, name='0.9x1.25_GRDC',                       file=f'{src_grid_root}/SCRIPgrid_0.9x1.25_GRDC_c130307.nc' )
 # add_grid(id='13', **std_slurm_opts, name='360x720_cruncep',                     file=f'{src_grid_root}/SCRIPgrid_360x720_cruncep_c120830.nc' )
-# add_grid(id='14', **big_slurm_opts, name='1km-merge-10min_HYDRO1K-merge-nomask',file=f'{src_grid_root}/SCRIPgrid_1km-merge-10min_HYDRO1K-merge-nomask_c20200415.nc' )
+add_grid(id='14', **xxl_slurm_opts, name='1km-merge-10min_HYDRO1K-merge-nomask',file=f'{src_grid_root}/SCRIPgrid_1km-merge-10min_HYDRO1K-merge-nomask_c20200415.nc' )
 # add_grid(id='15', **std_slurm_opts, name='0.5x0.5_GSDTG2000',                   file=f'{src_grid_root}/SCRIPgrid_0.5x0.5_GSDTG2000_c240125.nc' )
-# add_grid(id='16', **std_slurm_opts, name='0.1x0.1_nomask',                      file=f'{src_grid_root}/SCRIPgrid_0.1x0.1_nomask_c20260731.nc' )
-add_grid(id='17', **xxl_slurm_opts, name='0.01x0.01_nomask',                    file=f'{src_grid_root}/SCRIPgrid_0.01x0.01_nomask_c20260731.nc' )
 
 # add_grid(id='16', **std_slurm_opts, name='0.1x0.1_nomask',                      file=f'{src_grid_root}/SCRIPgrid_0.1x0.1_nomask_c110712.nc' )
-# add_grid(id='17', **big_slurm_opts, name='0.01x0.01_nomask',                    file=f'{src_grid_root}/SCRIPgrid_0.01x0.01_nomask_c250510.nc' )
+# add_grid(id='17', **xxl_slurm_opts, name='0.01x0.01_nomask',                    file=f'{src_grid_root}/SCRIPgrid_0.01x0.01_nomask_c250510.nc' )
+
+# add_grid(id='16', **std_slurm_opts, name='0.1x0.1_nomask',                      file=f'{src_grid_root}/SCRIPgrid_0.1x0.1_nomask_c20260731.nc' ) # newer versions created at OLCF when PM was down
+# add_grid(id='17', **xxl_slurm_opts, name='0.01x0.01_nomask',                    file=f'{src_grid_root}/SCRIPgrid_0.01x0.01_nomask_c20260731.nc' ) # newer versions created at OLCF when PM was down
 
 #---------------------------------------------------------------------------------------------------
 def get_batch_script_text( opts, tmp_root ):
@@ -139,7 +149,10 @@ def get_batch_script_text( opts, tmp_root ):
     slurm_mach_specific_opts = ''
     slurm_mach_specific_opts += (f'\n#SBATCH --qos={qos}'                if qos is not None else '')
     slurm_mach_specific_opts += (f'\n#SBATCH --constraint={constraint}'  if constraint is not None else '')
-    return f'''#!/bin/sh
+    # bash, not sh - the unified loader sourced below refuses to run without
+    # $BASH_VERSION, and it is only bash here by virtue of /bin/sh being a
+    # symlink to it
+    return f'''#!/bin/bash
 #SBATCH --account={account} {slurm_mach_specific_opts}
 #SBATCH --output={proj_root}/logs_slurm/slurm-%x-%j.out
 #SBATCH --time={time_limit}
@@ -147,9 +160,14 @@ def get_batch_script_text( opts, tmp_root ):
 #SBATCH --mail-user={mail_user}
 #SBATCH --mail-type={mail_type}
 cd {tmp_root}
+source {unified_src}
+# # verify the ESMF resolved here can actually be launched in parallel by srun.
+# # The job's environment is what matters, not the one this script was written
+# # from, so this has to run after the source above and before the srun below.
+# PYTHONPATH={taos_root} python3 -c 'from taos.util import check_esmf_rwg; check_esmf_rwg()' || exit 1
 {job_env}srun {srun_opts} ESMF_RegridWeightGen {map_opts} -s {src_grid_file} -d {dst_grid_file}  -w {map_file}
 '''
-# source {unified_src}
+
 #---------------------------------------------------------------------------------------------------
 def human_readable_size(path):
     size = os.path.getsize(path)
@@ -190,6 +208,7 @@ for n,opts in enumerate(grid_opt_list):
     # Submit the batch job
     job_name = f'generate_fsurdat_map_{dst_grid_name}_{src_grid_id}'
     cmd = f'sbatch --job-name={job_name}  {batch_script_path}'
+    print(cmd)
     run_cmd(cmd)
 print()
 #---------------------------------------------------------------------------------------------------
