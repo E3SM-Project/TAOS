@@ -77,53 +77,107 @@ def cime_env_ok(cfg):
     return _cime_env_cache[tool]
 
 
+# Install prefixes where a bundled-MPI check makes no sense — a system
+# package naturally keeps its libraries alongside the binaries it ships.
+_SYSTEM_PREFIXES = ('/', '/usr', '/usr/local', '/opt', '/lib', '/lib64')
+
+
+def linked_libs(exe, pattern):
+    """Return {soname: resolved path} for linked libraries matching pattern.
+
+    Returns {} when ldd cannot report anything (not found, static binary,
+    timeout), so an empty result means 'unknown', never 'none linked'.
+    """
+    try:
+        ldd = sp.run(['ldd', exe], capture_output=True, text=True, timeout=30)
+    except (OSError, sp.SubprocessError):
+        return {}
+    matches = re.findall(r'^\s*(\S+)\s+=>\s+(/\S+)', ldd.stdout, re.MULTILINE)
+    return {soname: path for soname, path in matches if re.search(pattern, soname)}
+
+
+def bundled_mpi_libs(exe):
+    """Return {soname: path} for MPI libraries shipped inside exe's own prefix.
+
+    A conda/pixi environment that installs its own mpich or openmpi alongside
+    ESMF is the signature of an MPI that srun cannot launch — those builds
+    carry no PMI client, so each rank ends up in a private MPI_COMM_WORLD of
+    size 1. An ESMF linked against a site MPI resolves libmpi outside its own
+    prefix (e.g. /opt/cray/pe/mpich/...) and returns {} here.
+
+    Returns {} for binaries installed under a system prefix, where sharing a
+    prefix with libmpi carries no such implication.
+    """
+    exe_path = os.path.realpath(exe)
+    prefix = os.path.dirname(os.path.dirname(exe_path))
+    if prefix in _SYSTEM_PREFIXES:
+        return {}
+    return {soname: path for soname, path in linked_libs(exe, r'^libmpi').items()
+            if os.path.realpath(path).startswith(prefix + os.sep)}
+
+
 def esmf_comm(exe):
     """Return the MPI backend ESMF was built with, or '' if undetermined.
 
     ESMF records this as ``ESMF_COMM`` in esmf.mk — 'mpiuni' means the serial
     stub (no real MPI), anything else ('mpich', 'openmpi', 'intelmpi', ...)
-    means a genuine MPI build. esmf.mk is located via $ESMFMKFILE, which conda
-    activation sets, falling back to <prefix>/lib/esmf.mk next to the binary.
+    means a genuine MPI build.
+
+    The esmf.mk beside the binary wins over $ESMFMKFILE, because the two can
+    describe different installs: E3SM-unified puts an MPI-enabled ESMF from
+    its spack view on $PATH while exporting an $ESMFMKFILE from its pixi env,
+    where ESMF is nompi. Trusting the variable there reports a good build as
+    mpiuni. $ESMFMKFILE is still consulted last, for layouts that keep
+    esmf.mk somewhere other than <prefix>/lib.
 
     When esmf.mk cannot be found, falls back to checking whether the binary
     links an MPI library. That fallback can only confirm MPI, never rule it
     out (a statically linked build shows no libmpi), so it returns '' rather
     than 'mpiuni' when it finds nothing.
     """
-    mk = os.environ.get('ESMFMKFILE', '')
-    if not (mk and os.path.exists(mk)):
-        mk = os.path.join(os.path.dirname(os.path.dirname(exe)), 'lib', 'esmf.mk')
-    if os.path.exists(mk):
+    # both the as-given path and its realpath - a package manager may expose
+    # the tool through a symlink farm whose lib/ is populated the same way
+    candidates = [os.path.join(os.path.dirname(os.path.dirname(path)), 'lib', 'esmf.mk')
+                  for path in (exe, os.path.realpath(exe))]
+    candidates.append(os.environ.get('ESMFMKFILE', ''))
+    for mk in candidates:
+        if not (mk and os.path.exists(mk)):
+            continue
         try:
             text = open(mk).read()
         except OSError:
-            text = ''
+            continue
         # the '# ESMF_COMM: <value>' summary comment, else the -D compile flag
         for pattern in (r'^#\s*ESMF_COMM:\s*(\S+)', r'-DESMF_COMM=(\w+)'):
             match = re.search(pattern, text, re.MULTILINE)
             if match:
                 return match.group(1)
     # esmf.mk unavailable - MPI libs in the link line still prove a real build
-    try:
-        ldd = sp.run(['ldd', exe], capture_output=True, text=True, timeout=30)
-        if re.search(r'\blibmpi\w*\.so', ldd.stdout):
-            return 'mpi (from ldd)'
-    except (OSError, sp.SubprocessError):
-        pass
+    if linked_libs(exe, r'^libmpi'):
+        return 'mpi (from ldd)'
     return ''
 
 
 def check_esmf_rwg(quiet=False):
-    """Verify ESMF_RegridWeightGen is on PATH and built with real MPI.
+    """Verify ESMF_RegridWeightGen is on PATH and launchable by the job step.
 
-    Returns the resolved path to the tool. Raises RuntimeError if it is
-    missing, or if ESMF was built with ESMF_COMM=mpiuni — the serial stub,
-    which makes every rank of a parallel launch run the same serial regrid
-    in the same directory, racing on ESMF's .esmf.nc temp mesh file and
-    dying with a confusing NetCDF "Unable to open existing file" error.
+    Returns the resolved path to the tool. Raises RuntimeError when it is
+    missing, when ESMF was built with ESMF_COMM=mpiuni, or when the build
+    bundles its own MPI on a machine whose jobs run under srun. All three
+    fail the same way: every rank of a parallel launch runs the same serial
+    regrid in the same directory, racing on ESMF's .esmf.nc temp mesh file.
+
+    mpiuni dies quickly with a confusing NetCDF "Unable to open existing
+    file" error. The bundled-MPI case is nastier — nothing errors, the ranks
+    just grind against each other until the job hits its wall clock, so a
+    map that takes 30 minutes on a site MPI can burn 3 hours and produce
+    nothing. The giveaway in the log is ESMF's "Starting weight generation"
+    banner appearing once per rank instead of once per job.
 
     Prints a warning but does not raise when the build cannot be identified,
-    since a false block is worse than an unverified pass.
+    since a false block is worse than an unverified pass. Set
+    TAOS_SKIP_ESMF_MPI_CHECK=1 to bypass the bundled-MPI check when the
+    launch is known to work (e.g. mpirun rather than srun).
 
     Worth running before generating batch scripts: sbatch exports the current
     environment by default, so the ESMF found here is the one the job uses.
@@ -145,6 +199,30 @@ def check_esmf_rwg(quiet=False):
             '  parallel launch produces N identical serial jobs that corrupt\n'
             "  each other's temp files. Install or load an ESMF built with\n"
             "  real MPI (conda: 'esmf=*=mpi_*', not 'nompi_*').")
+
+    # ESMF_COMM only says an MPI was linked, not that srun can launch it. A
+    # conda/pixi env that ships its own mpich reports ESMF_COMM=mpich and
+    # still gives every rank a private communicator, because those builds
+    # carry no PMI client for Slurm to hand a job step to. Only flag it where
+    # srun is the launcher — the same build driven by its own mpirun is fine.
+    bundled = bundled_mpi_libs(exe)
+    if bundled and shutil.which('srun') and not os.environ.get('TAOS_SKIP_ESMF_MPI_CHECK'):
+        pmi = linked_libs(exe, r'^libpmi|^libpals')
+        pmi_note = ('links no PMI client' if not pmi else
+                    'links ' + ', '.join(sorted(pmi)))
+        raise RuntimeError(
+            f'ESMF_RegridWeightGen bundles its own MPI (ESMF_COMM={comm}) and\n'
+            f'  cannot be launched in parallel by srun on this machine.\n'
+            f'  {exe}\n'
+            + ''.join(f'  {soname} -> {path}\n' for soname, path in sorted(bundled.items()))
+            + f'  It {pmi_note}, so each rank initializes a private\n'
+            '  MPI_COMM_WORLD of size 1 and redundantly runs the whole regrid.\n'
+            '  The job does not fail — it silently runs N racing serial copies\n'
+            '  until it hits the wall clock.\n'
+            '  Load a site-MPI ESMF instead (its libmpi should resolve outside\n'
+            '  the install prefix, e.g. /opt/cray/pe/mpich/...); the E3SM\n'
+            '  unified environment provides one. Set TAOS_SKIP_ESMF_MPI_CHECK=1\n'
+            '  to bypass this check if the launch is known to work.')
 
     if not comm:
         print(f'\n  {clr.YELLOW}NOTE: could not determine the MPI backend of'
