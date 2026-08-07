@@ -8,6 +8,7 @@ os.path.exists are mocked throughout.
 Run with:
     python -m pytest tests/test_util.py
 """
+import os
 import sys
 import tempfile
 import unittest
@@ -16,7 +17,8 @@ from unittest.mock import MagicMock, patch
 import subprocess as sp
 
 
-from taos.util import cime_env_ok, e3sm_env_prefix, ensure_dir, get_env_var, print_line, run_cmd
+from taos.util import (check_esmf_rwg, cime_env_ok, e3sm_env_prefix, ensure_dir,
+                       esmf_comm, get_env_var, print_line, run_cmd)
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +174,121 @@ class TestGetEnvVar(unittest.TestCase):
         mock_run.return_value = mock_result
         result = get_env_var('/some/config.sh', 'MY_VAR')
         self.assertEqual(result, '/some/path/value')
+
+
+# ---------------------------------------------------------------------------
+# esmf_comm
+
+class TestEsmfComm(unittest.TestCase):
+
+    @staticmethod
+    def _make_install(root, name, comm):
+        """Create <root>/<name>/{bin,lib} holding an esmf.mk declaring comm."""
+        prefix = Path(root) / name
+        (prefix / 'bin').mkdir(parents=True)
+        (prefix / 'lib').mkdir(parents=True)
+        exe = prefix / 'bin' / 'ESMF_RegridWeightGen'
+        exe.touch()
+        (prefix / 'lib' / 'esmf.mk').write_text(f'# ESMF_COMM: {comm}\n')
+        return exe
+
+    def test_prefers_esmf_mk_beside_the_binary_over_the_env_var(self):
+        # E3SM-unified puts an MPI build on $PATH but exports an $ESMFMKFILE
+        # from a separate nompi env - trusting the variable reported the good
+        # build as mpiuni and aborted jobs that would have run fine
+        with tempfile.TemporaryDirectory() as d:
+            exe = self._make_install(d, 'spack_view', 'mpi')
+            other = self._make_install(d, 'pixi_env', 'mpiuni')
+            with patch.dict('os.environ',
+                            {'ESMFMKFILE': str(other.parent.parent / 'lib' / 'esmf.mk')}):
+                self.assertEqual(esmf_comm(str(exe)), 'mpi')
+
+    def test_falls_back_to_env_var_when_prefix_has_no_esmf_mk(self):
+        with tempfile.TemporaryDirectory() as d:
+            other = self._make_install(d, 'elsewhere', 'openmpi')
+            bare = Path(d) / 'bare' / 'bin'
+            bare.mkdir(parents=True)
+            exe = bare / 'ESMF_RegridWeightGen'
+            exe.touch()
+            with patch.dict('os.environ',
+                            {'ESMFMKFILE': str(other.parent.parent / 'lib' / 'esmf.mk')}):
+                self.assertEqual(esmf_comm(str(exe)), 'openmpi')
+
+
+# ---------------------------------------------------------------------------
+# check_esmf_rwg
+
+def _ldd_stdout(*entries):
+    """Build fake ldd output from 'soname => path' strings."""
+    return ''.join(f'\t{entry} (0x00007f0000000000)\n' for entry in entries)
+
+
+# a conda env shipping its own mpich - libmpi resolves inside the prefix
+_CONDA_LDD = _ldd_stdout(
+    'libmpifort.so.12 => /home/u/envs/taos_env/bin/../lib/libmpifort.so.12',
+    'libmpi.so.12 => /home/u/envs/taos_env/bin/../lib/libmpi.so.12',
+    'libnetcdf.so.19 => /home/u/envs/taos_env/lib/libnetcdf.so.19')
+
+# a site-MPI build - libmpi resolves outside the prefix, and PMI is linked
+_CRAY_LDD = _ldd_stdout(
+    'libmpi_gnu_123.so.12 => /opt/cray/pe/mpich/9.0.1/ofi/gnu/12.3/lib/libmpi_gnu_123.so.12',
+    'libpmi.so.0 => /opt/cray/pe/lib64/libpmi.so.0',
+    'libpmi2.so.0 => /opt/cray/pe/lib64/libpmi2.so.0')
+
+
+class TestCheckEsmfRwg(unittest.TestCase):
+
+    def setUp(self):
+        # neutralize a real TAOS_SKIP_ESMF_MPI_CHECK in the developer's shell
+        patcher = patch.dict('os.environ', {}, clear=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop('TAOS_SKIP_ESMF_MPI_CHECK', None)
+
+    def _run(self, exe, ldd_stdout, comm, has_srun=True):
+        """Invoke check_esmf_rwg against a mocked tool path and link line."""
+        def which(name):
+            if name == 'ESMF_RegridWeightGen':
+                return exe
+            return '/usr/bin/srun' if has_srun else None
+        with patch('taos.util.shutil.which', side_effect=which), \
+             patch('taos.util.esmf_comm', return_value=comm), \
+             patch('taos.util.sp.run', return_value=MagicMock(stdout=ldd_stdout)):
+            return check_esmf_rwg(quiet=True)
+
+    def test_raises_when_build_bundles_its_own_mpi(self):
+        with self.assertRaises(RuntimeError) as ctx:
+            self._run('/home/u/envs/taos_env/bin/ESMF_RegridWeightGen',
+                      _CONDA_LDD, 'mpich')
+        msg = str(ctx.exception)
+        self.assertIn('bundles its own MPI', msg)
+        self.assertIn('libmpi.so.12', msg)
+        self.assertIn('links no PMI client', msg)
+
+    def test_passes_for_site_mpi_build(self):
+        exe = '/soft/spack/opt/esmf-8.9.1/bin/ESMF_RegridWeightGen'
+        self.assertEqual(self._run(exe, _CRAY_LDD, 'mpi'), exe)
+
+    def test_passes_when_srun_is_not_the_launcher(self):
+        # the same bundled build driven by its own mpirun works fine
+        exe = '/home/u/envs/taos_env/bin/ESMF_RegridWeightGen'
+        self.assertEqual(self._run(exe, _CONDA_LDD, 'mpich', has_srun=False), exe)
+
+    def test_env_var_bypasses_the_bundled_mpi_check(self):
+        os.environ['TAOS_SKIP_ESMF_MPI_CHECK'] = '1'
+        exe = '/home/u/envs/taos_env/bin/ESMF_RegridWeightGen'
+        self.assertEqual(self._run(exe, _CONDA_LDD, 'mpich'), exe)
+
+    def test_mpiuni_still_raises_before_the_bundled_check(self):
+        with self.assertRaises(RuntimeError) as ctx:
+            self._run('/home/u/envs/taos_env/bin/ESMF_RegridWeightGen',
+                      _CONDA_LDD, 'mpiuni')
+        self.assertIn('mpiuni', str(ctx.exception))
+
+    def test_system_prefix_is_not_treated_as_bundled(self):
+        exe = '/usr/bin/ESMF_RegridWeightGen'
+        ldd = _ldd_stdout('libmpi.so.12 => /usr/lib64/libmpi.so.12')
+        self.assertEqual(self._run(exe, ldd, 'mpich'), exe)
 
 
 # ---------------------------------------------------------------------------
