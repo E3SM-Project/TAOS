@@ -8,6 +8,12 @@ Submit SLURM jobs or call taos module functions directly as needed.
 for interactive workflow at NERSC:
     salloc --nodes 1 --qos interactive --time 4:00:00 --cpus-per-task=32 --constraint cpu --account=e3sm
     python run_workflow.py
+
+for interactive workflow at OLCF:
+    salloc --time 4:00:00 --account=cli115 --nodes=1 --cpus-per-task=32
+    salloc --time 4:00:00 --account=cli115 --nodes=4 --cpus-per-task=32
+    micromamba activate taos_env
+    python run_workflow.py
 """
 import os, pathlib
 from taos import taos_config
@@ -27,18 +33,21 @@ slurm_qos        = cfg.get('slurm.qos', '')
 #-------------------------------------------------------------------------------
 # step flags — set to False (or comment out) to skip a step
 
-use_batch = True  # set False to run steps directly on the current node
+use_batch = False  # set False to run steps directly on the current node
 
 do_maps   = True
-do_domain = True
-do_topo   = True
+# do_domain = True
+# do_topo   = True
 
 #-------------------------------------------------------------------------------
 # select which grids to process - use None to process all grids in project.yaml,
 # or list specific grid names to process a subset
 
-active_grids = None
-active_grids = ['STRONG-CA-32x5-v2']
+# active_grids = None
+active_grids = [
+                'STRONG-CA-32x5-v1',
+                # 'STRONG-CA-32x5-v2',
+                ]
 
 #-------------------------------------------------------------------------------
 # submit one set of jobs per grid
@@ -52,6 +61,7 @@ for grid_cfg in cfg.iter_grids():
     print_line()
 
     sbatch = f'sbatch'
+    sbatch += f' --nodes=1'
     sbatch += f' --export=ALL'
     sbatch += f' --output={logs_root}/%x-%j.slurm.main.out'
     sbatch += f' --account={slurm_account}'
@@ -71,8 +81,9 @@ for grid_cfg in cfg.iter_grids():
         cmd = ''
         if locals().get('do_maps', False):
             map_args = ''
-            map_args += ' --create-maps-ocn'
-            map_args += ' --create-maps-lnd'
+            # map_args += ' --create-maps-ocn'
+            # map_args += ' --create-maps-lnd'
+            map_args += ' --create-maps-spa'
             cmd += f'python -m taos.maps {yaml_path} --grid-name {grid_name} {map_args}'
         if locals().get('do_domain', False):
             if cmd:
@@ -97,7 +108,12 @@ for grid_cfg in cfg.iter_grids():
 
         cmd = f'python -m taos.topo {yaml_path} --grid-name {grid_name} {topo_args}'
         if use_batch:
-            topo_slurm_opts = '--nodes=1 --ntasks-per-node=4 --time=0:30:00'
+            # mbda is a single-node process, and the pg2 pass (--square-fields)
+            # holds two full copies of the 14.9B-point source (~240 GB) — more
+            # than an Andes batch node (230 GB). The Andes gpu partition nodes
+            # have 960 GB / 56 cores.
+            topo_slurm_opts = '--partition=gpu --nodes=1 --cpus-per-task=56 --time=1:00:00'
+            # topo_slurm_opts = '--nodes=4 --cpus-per-task=32 --time=1:00:00'
             run_cmd(f'{sbatch} --job-name=gen_topo_{grid_name} {topo_slurm_opts} --wrap="{cmd}"')
         else:
             run_cmd(cmd)

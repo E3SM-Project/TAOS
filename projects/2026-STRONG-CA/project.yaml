@@ -30,22 +30,41 @@ grid:
   lnd_name: ""
   lnd_file: ""
 
+  # ocn_name: "IcoswISC30E3r5"
+  # ocn_file: "${DIN_LOC_ROOT}/ocn/mpas-o/IcoswISC30E3r5/ocean.IcoswISC30E3r5.mask.scrip.20231120.nc"
+  # lnd_name: "r05"
+  # lnd_file: "${DIN_LOC_ROOT}/lnd/clm2/mappingdata/grids/SCRIPgrid_0.5x0.5_nomask_c110308.nc"
+
+  ocn_name: "RRSwISC6to18E3r5"
+  ocn_file: "${DIN_LOC_ROOT}/ocn/mpas-o/RRSwISC6to18E3r5/ocean.RRSwISC6to18E3r5.mask.scrip.20240327.nc"
+
+  lnd_name: "r0125"
+  lnd_file: "${DIN_LOC_ROOT}/lnd/clm2/mappingdata/grids/MOSART_global_8th.scrip.20180211c.nc"
+
   # SPA grid — optional, only needed for EAMxx SPA maps (defaults to <name>pg2)
-  spa_name: ""
-  spa_file: ""
+  spa_name: "ne30pg2"
+  spa_file: "${grid_root}/ne30pg2_scrip.nc"
 
   # Use homme_tool for np4 SCRIP generation (instead of pure-Python path)
   homme_np4_scrip:  false
 
 grids:
-  # ne32 base w/ 5x refinement => dx-pg2 ~ 4-175 km
+
+  # grid version notes:
+  #   v1 - inner refinement follows CA coastline
+  #   v2 - same as v1 but includes wide buffer region w/ intermediate resolution
+
+  #  32x5 =>  ne32 base w/ 5x refinement => dx-pg2 ~ 4-175 km
+  # 128x3 => ne128 base w/ 3x refinement => dx-pg2 ~ 4-44 km
+
   - name: "STRONG-CA-32x5-v1"
     # grid_file_exodus: ${grid_root}/STRONG-CA-32x5-v1.g
   - name: "STRONG-CA-32x5-v2"
     # grid_file_exodus: ${grid_root}/STRONG-CA-32x5-v2.g
-  # ne128 base w/ 3x refinement => dx-pg2 ~ 4-44 km
+
   # - name: "STRONG-CA-128x3-v1"
   #   grid_file_exodus: ${grid_root}/STRONG-CA-128x3-v1.g
+
   # - name: "STRONG-CA-128x3-v2"
   #   grid_file_exodus: ${grid_root}/STRONG-CA-128x3-v2.g
 
@@ -87,6 +106,7 @@ machines:
   # OLCF:
   #   paths:
   #     grid_data_root: "/lustre/orion/cli115/proj-shared/$USER/TAOS"
+  #     topo_file_src:   "/lustre/orion/cli115/proj-shared/hannah6/TAOS/high-res-topo/GMTED2010_7.5_stitch_S5P_OPER_REF_DEM_15_NCL_24-3.r172800x86400.nc"
   #   slurm:
   #     account: "cli115"
 
@@ -95,7 +115,7 @@ machines:
 topo:
   # Set to false to use the original homme_tool topo_pgn_to_smoothed instead of
   # the Python SEM smoother. Requires paths.homme_tool_root to be set.
-  use_python_smooth: false
+  use_python_smooth: true
   # Set to true to force the pure-Python disk-averaged remap even when
   # paths.mbda_path is set. Useful for quick login-node tests. The Python
   # fallback is automatically used when paths.mbda_path is empty. Note: the
@@ -110,3 +130,8 @@ slurm:
   account:    ""    # set per-machine in machines: section above
   constraint: ""
   qos:        ""
+  # Shell lines injected into generated batch scripts ahead of the launch
+  # command, for machine-specific runtime settings. An empty list defers to
+  # the machine default in taos/machines.yaml (which is where these normally
+  # belong — override here only for project-specific needs).
+  job_env:    []

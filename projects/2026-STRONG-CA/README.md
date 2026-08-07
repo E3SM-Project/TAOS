@@ -5,40 +5,54 @@ This project is focused on using "ensemble boosting" to simulate extreme heatwav
 
 --------------------------------------------------------------------------------
 
+# RRM Grids
+
+We are currently planning to rely on nudging with EAMxx to downscale an event simulated by a low-res E3SMv3 case, so we can afford to keep a very low-res grid outside of the region of interest. Two refined grids were created focused on California. In Both cases the base resolution in ne32, with a 5x refinement to bring the finest resolution to ~3km/5km in the dycor/physics grid, similar to ne1024pg2. Additional grids were considered that used a ne128x3 to have finer resolution outside of california, but we don't anticipate using those.
+
+The refinement region is created by outlining the state boundaries and then expanding this away from the coast with a blurring technique. The "v2" grid also includes an intermediate "buffer" region. We only plan on using the "v1" grid since we are planning to rely on nudging, so then we can focus mainly on the localized impact of the event that can inform our electricity grid model.
+
+![RRM Grids](grid_comparison.png)
+
+--------------------------------------------------------------------------------
+
 # Grid Creation Notes
 
-The RRM grid is created by first generating a PNG file with `generate_refinement_image.py` that shades the state of california and builds buffer zone around it. The `plot.grid.py` script can then be used to visual one of more grids for comparison. Both scripts should be reviewed and modified before running.
+The RRM grid is created by first generating a PNG file with `generate_refinement_image.py` that shades the state of california. The `generate_grids.py` script then runs SQuadGen and the TempestRemap tools for each grid declared with `add_grid()` — all paths are taken from `project.yaml`, so nothing needs to be edited when switching machines. The `plot.grid.py` script can then be used to visual one of more grids for comparison. All of these scripts should be reviewed and modified before running.
 
 The general grid generation workflow is as follows:
 
 ```shell
 python generate_refinement_image.py
-# < SQuadGen commands >
+python generate_grids.py
 python plot.grid.py
 ```
 
-The details of the SQuadGen commands and some variations are described next.
+Below are the original SQuadGen commands and variations that I used prior to writing the generate_grids.py script to automate the grid generation task.
 
 ```shell
 
-DATA_ROOT=/global/cfs/cdirs/m5277/whannah/2026-STRONG-CA
+# DATA_ROOT=/global/cfs/cdirs/m5277/whannah/2026-STRONG-CA
+DATA_ROOT=/lustre/orion/cli115/proj-shared/hannah6/TAOS
 GRID_ROOT=${DATA_ROOT}/files_grid
-REF_IMAGE_ROOT=/global/homes/w/whannah/E3SM_grid_support/projects/2026-STRONG
+REF_IMAGE_ROOT=~/TAOS/projects/2026-STRONG-CA
 
-REF_IMAGE_V1=${REF_IMAGE_ROOT}/2026-STRONG-CA-RRM_refinement_image_v1.png # w/  halo region
-REF_IMAGE_V2=${REF_IMAGE_ROOT}/2026-STRONG-CA-RRM_refinement_image_v2.png # w/o halo region
+mkdir -p ${GRID_ROOT}
 
+REF_IMAGE_V1=${REF_IMAGE_ROOT}/2026-STRONG-CA-RRM_refinement_image_v1.png # w/o halo/buffer region
+REF_IMAGE_V2=${REF_IMAGE_ROOT}/2026-STRONG-CA-RRM_refinement_image_v2.png # w/  halo/buffer region
+
+### grid parameters
 # BASE_RES=32;REFINE_LVL=5; REF_IMAGE=$REF_IMAGE_V1; GRID_NAME=STRONG-CA-${BASE_RES}x${REFINE_LVL}-v1 # ne32 => ne1024
-# BASE_RES=128;REFINE_LVL=3; REF_IMAGE=$REF_IMAGE_V1; GRID_NAME=STRONG-CA-${BASE_RES}x${REFINE_LVL}-v1 # ne128 => ne1024
-
 # BASE_RES=32;REFINE_LVL=5; REF_IMAGE=$REF_IMAGE_V2; GRID_NAME=STRONG-CA-${BASE_RES}x${REFINE_LVL}-v2 # ne32 => ne1024
-BASE_RES=128;REFINE_LVL=3; REF_IMAGE=$REF_IMAGE_V2; GRID_NAME=STRONG-CA-${BASE_RES}x${REFINE_LVL}-v2 # ne128 => ne1024
+
+# BASE_RES=128;REFINE_LVL=3; REF_IMAGE=$REF_IMAGE_V1; GRID_NAME=STRONG-CA-${BASE_RES}x${REFINE_LVL}-v1 # ne128 => ne1024
+# BASE_RES=128;REFINE_LVL=3; REF_IMAGE=$REF_IMAGE_V2; GRID_NAME=STRONG-CA-${BASE_RES}x${REFINE_LVL}-v2 # ne128 => ne1024
 
 SQuadGen --refine_file ${REF_IMAGE} --resolution ${BASE_RES} --refine_level ${REFINE_LVL} \
 --refine_type LOWCONN --smooth_type SPRING --smooth_dist 10 --smooth_iter 20 \
 --lon_ref 240 --lat_ref 38 --output ${GRID_ROOT}/${GRID_NAME}.g
-GenerateVolumetricMesh --in ${GRID_ROOT}/${GRID_NAME}.g     --out ${GRID_ROOT}/${GRID_NAME}-pg2.g --np 2 --uniform
-ConvertMeshToSCRIP     --in ${GRID_ROOT}/${GRID_NAME}-pg2.g --out ${GRID_ROOT}/${GRID_NAME}-pg2_scrip.nc
+GenerateVolumetricMesh --in ${GRID_ROOT}/${GRID_NAME}.g     --out ${GRID_ROOT}/${GRID_NAME}pg2.g --np 2 --uniform
+ConvertMeshToSCRIP     --in ${GRID_ROOT}/${GRID_NAME}pg2.g --out ${GRID_ROOT}/${GRID_NAME}pg2_scrip.nc
 ls -l ${GRID_ROOT}/${GRID_NAME}*
 
 # Commands to generate uniform (i.e. unrefined) grids for comparison
@@ -46,6 +60,18 @@ NE=128
 GenerateCSMesh --alt --res ${NE} --file ${GRID_ROOT}/ne${NE}.g
 GenerateVolumetricMesh --in ${GRID_ROOT}/ne${NE}.g --out ${GRID_ROOT}/ne${NE}pg2.g --np 2 --uniform
 ConvertMeshToSCRIP --in ${GRID_ROOT}/ne${NE}pg2.g --out ${GRID_ROOT}/ne${NE}pg2_scrip.nc
+
+```
+
+# SPA Grid File
+
+```shell
+GRID_ROOT=$(python -m taos.config project.yaml derived.grid_root) || exit 1
+NE=30
+GenerateCSMesh --alt --res ${NE} --file ${GRID_ROOT}/ne${NE}.g
+GenerateVolumetricMesh --in ${GRID_ROOT}/ne${NE}.g --out ${GRID_ROOT}/ne${NE}pg2.g --np 2 --uniform
+ConvertMeshToSCRIP --in ${GRID_ROOT}/ne${NE}pg2.g --out ${GRID_ROOT}/ne${NE}pg2_scrip.nc
+echo ; echo ${GRID_ROOT}/ne${NE}pg2_scrip.nc ; echo
 ```
 
 --------------------------------------------------------------------------------
