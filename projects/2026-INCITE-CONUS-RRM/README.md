@@ -20,6 +20,8 @@ python 2026-INCITE-CONUS-RRM_generate_refinement_image_ngl.py
 # < SQuadGen commands >
 ```
 
+## SQuadGen commands
+
 The details of the SQuadGen commands are below. If you're running these commands you will likely need to adjust the paths.
 
 
@@ -60,7 +62,9 @@ REF_IMAGE=${HOME}/E3SM_grid_support/figs_RRM/RRM-png.2025-conus.v1.png
 SQuadGen --refine_file ${REF_IMAGE} --resolution ${BASE_RES} --refine_level ${REFINE_LVL} --refine_type LOWCONN --smooth_type SPRING --smooth_dist ${SDIST} --smooth_iter ${SITER} --lon_ref 260 --lat_ref 40 --output ${GRID_ROOT}/${GRID_NAME}.g ; GenerateVolumetricMesh --in ${GRID_ROOT}/${GRID_NAME}.g     --out ${GRID_ROOT}/${GRID_NAME}-pg2.g --np 2 --uniform ; ConvertMeshToSCRIP     --in ${GRID_ROOT}/${GRID_NAME}-pg2.g --out ${GRID_ROOT}/${GRID_NAME}-pg2_scrip.nc; ls -l ${GRID_ROOT}/${GRID_NAME}*
 ```
 
-Below are some commands that were used to explore slightl altered versions.
+## Alt Grid Versions - not used for real experiments
+
+Below are some commands that were used to explore slightly altered versions.
 
 ```shell
 # alt w/o rotation
@@ -76,7 +80,9 @@ SQuadGen --refine_rect ${RLON1},${RLAT1},${RLON2},${RLAT2},${REFINE_LVL} --resol
 
 ```
 
-```shell # Unrefined grids for comparison
+## Unrefined grids for comparison
+
+```shell
 NE=128
 GenerateCSMesh --alt --res ${NE} --file ${GRID_ROOT}/ne${NE}.g
 GenerateVolumetricMesh --in ${GRID_ROOT}/ne${NE}.g --out ${GRID_ROOT}/ne${NE}pg2.g --np 2 --uniform
