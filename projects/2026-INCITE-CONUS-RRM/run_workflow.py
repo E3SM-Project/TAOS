@@ -50,12 +50,20 @@ do_domain = True
 
 # map_components = ['spa']
 # map_components = ['lnd']
+# map_components = ['rof']
 map_components = ['ocn']
-# map_components = ['ocn','lnd','spa']
+# map_components = ['ocn','lnd','rof','spa']
 
 
 # map_algorithms = ['traave','trbilin','trfv2','trintbilin']
 map_algorithms = ['traave']
+
+# per-component algorithm overrides — components not listed here use
+# map_algorithms above. The land↔river coupling only exchanges conservative
+# fluxes, so the river maps only need traave.
+MAP_ALGORITHMS_COMP = {
+    'rof': ['traave'],
+}
 
 #-------------------------------------------------------------------------------
 # topography options
@@ -201,7 +209,8 @@ for grid_cfg in cfg.iter_grids():
     if locals().get('do_maps', False):
         # one job per (component, algorithm); spa is always traave and only
         # produces a single map, so it gets one job rather than one per algorithm
-        map_jobs = [(c, a) for c in map_components if c != 'spa' for a in map_algorithms]
+        map_jobs = [(c, a) for c in map_components if c != 'spa'
+                    for a in MAP_ALGORITHMS_COMP.get(c, map_algorithms)]
         if 'spa' in map_components:
             map_jobs.append(('spa', 'traave'))
 
