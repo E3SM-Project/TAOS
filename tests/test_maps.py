@@ -18,6 +18,7 @@ import taos.maps as maps_mod
 from taos.maps import (
     _check_map,
     _ncremap_pair,
+    _resolve_flip_a2o,
     _unified_env_prefix,
     create_maps_lnd,
     create_maps_ocn,
@@ -73,6 +74,34 @@ class TestUnifiedEnvPrefix(unittest.TestCase):
         cfg = MockConfig()
         result = _unified_env_prefix(cfg)
         self.assertEqual(result, 'source /tools/unified.sh')
+
+
+# ---------------------------------------------------------------------------
+# _resolve_flip_a2o
+
+class TestResolveFlipA2o(unittest.TestCase):
+
+    def _cfg(self, **overrides):
+        cfg = MockConfig()
+        cfg._data = dict(cfg._data)
+        cfg._data.update(overrides)
+        return cfg
+
+    def test_defaults_to_false_when_unset(self):
+        cfg = MockConfig()
+        self.assertFalse(_resolve_flip_a2o(cfg, 'ocn'))
+        self.assertFalse(_resolve_flip_a2o(cfg, 'lnd'))
+
+    def test_reads_per_component_key(self):
+        cfg = self._cfg(**{'grid.lnd_flip_a2o_direction': True})
+        self.assertTrue(_resolve_flip_a2o(cfg, 'lnd'))
+        self.assertFalse(_resolve_flip_a2o(cfg, 'ocn'))
+
+    def test_accepts_string_values(self):
+        for text, expected in [('true', True), ('True', True), ('yes', True),
+                               ('1', True), ('false', False), ('no', False)]:
+            cfg = self._cfg(**{'grid.ocn_flip_a2o_direction': text})
+            self.assertEqual(_resolve_flip_a2o(cfg, 'ocn'), expected, text)
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +241,21 @@ class TestCreateMapsOcn(unittest.TestCase):
         cmds = ' '.join(c.args[0] for c in mock_run.call_args_list)
         self.assertIn('ne30pg2', cmds)
 
+    @patch('os.path.exists', return_value=True)
+    @patch('taos.maps.run_cmd')
+    def test_flip_moves_a2o_to_the_forward_map(self, mock_run, _mock_exists):
+        """ocn_flip_a2o_direction moves --a2o from the atm→ocn to the ocn→atm map."""
+        cfg = MockConfig()
+        cfg._data = dict(cfg._data)
+        cfg._data['grid.ocn_flip_a2o_direction'] = True
+        create_maps_ocn(cfg)
+        cmds = [c.args[0] for c in mock_run.call_args_list]
+        for alg in self._ALGORITHMS:
+            fwd = f'{self._MAPS}/map_oEC60to30v3_to_ne30pg2_{alg}.{self._TS}.nc'
+            rev = f'{self._MAPS}/map_ne30pg2_to_oEC60to30v3_{alg}.{self._TS}.nc'
+            self.assertIn('--a2o', next(c for c in cmds if fwd in c))
+            self.assertNotIn('--a2o', next(c for c in cmds if rev in c))
+
 
 # ---------------------------------------------------------------------------
 # create_maps_lnd
@@ -255,6 +299,38 @@ class TestCreateMapsLnd(unittest.TestCase):
             matching = [c for c in cmds if expected_map in c]
             self.assertEqual(len(matching), 1, f'Missing reverse map for {alg}')
             self.assertIn('--a2o', matching[0])
+
+    @patch('os.path.exists', return_value=True)
+    @patch('taos.maps.run_cmd')
+    def test_flip_moves_a2o_to_the_forward_map(self, mock_run, _mock_exists):
+        """The coarse-land-grid case: a pg2 land grid under a refined RRM atm grid.
+
+        lnd_flip_a2o_direction moves --a2o from the atm→lnd to the lnd→atm map.
+        """
+        cfg = MockConfig()
+        cfg._data = dict(cfg._data)
+        cfg._data['grid.lnd_flip_a2o_direction'] = True
+        create_maps_lnd(cfg)
+        cmds = [c.args[0] for c in mock_run.call_args_list]
+        for alg in self._ALGORITHMS:
+            fwd = f'{self._MAPS}/map_r05_r05_to_ne30pg2_{alg}.{self._TS}.nc'
+            rev = f'{self._MAPS}/map_ne30pg2_to_r05_r05_{alg}.{self._TS}.nc'
+            self.assertIn('--a2o', next(c for c in cmds if fwd in c))
+            self.assertNotIn('--a2o', next(c for c in cmds if rev in c))
+
+    @patch('os.path.exists', return_value=True)
+    @patch('taos.maps.run_cmd')
+    def test_lnd_flip_does_not_affect_ocn(self, mock_run, _mock_exists):
+        """The land switch must not change the ocean map convention."""
+        cfg = MockConfig()
+        cfg._data = dict(cfg._data)
+        cfg._data['grid.lnd_flip_a2o_direction'] = True
+        create_maps_ocn(cfg)
+        cmds = [c.args[0] for c in mock_run.call_args_list]
+        fwd = f'{self._MAPS}/map_oEC60to30v3_to_ne30pg2_traave.{self._TS}.nc'
+        rev = f'{self._MAPS}/map_ne30pg2_to_oEC60to30v3_traave.{self._TS}.nc'
+        self.assertNotIn('--a2o', next(c for c in cmds if fwd in c))
+        self.assertIn('--a2o', next(c for c in cmds if rev in c))
 
 
 # ---------------------------------------------------------------------------

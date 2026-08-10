@@ -11,6 +11,28 @@ from the project.yaml grid section:
   grid.lnd_name / grid.lnd_file
   grid.rof_name / grid.rof_file   (optional, defaults to lnd)
   grid.spa_name / grid.spa_file   (optional, defaults to ne30pg2)
+  grid.ocn_flip_a2o_direction     (optional, default false — see below)
+  grid.lnd_flip_a2o_direction     (optional, default false — see below)
+
+The --a2o switch controls the order in which ncremap hands the two grids
+to TempestRemap's GenerateOverlapMesh, which is picky about that order and
+fails outright when it is wrong. Each component generates two maps and
+exactly one of them carries --a2o:
+
+  grid.<comp>_flip_a2o_direction: false   --a2o on the atm→component map
+  grid.<comp>_flip_a2o_direction: true    --a2o on the component→atm map
+
+The switch is never simply "off" — putting it on exactly one direction is
+what keeps the grid pair in a consistent order. --a2o swaps the two grids,
+and the two map directions have already swapped source and destination
+relative to each other, so flagging one direction hands
+GenerateOverlapMesh the same grid first both times.
+
+The default suits a component grid finer than the atmosphere grid, which
+is the common case (e.g. an r05 land grid under ne30pg2). Set the flip
+true for a component whose grid is coarser than the atmosphere grid — an
+RRM atmosphere over a lower-resolution land grid, say — which otherwise
+fails with a GenerateOverlapMesh error.
 
 Usage
 -----
@@ -51,6 +73,19 @@ def _unified_env_prefix(cfg):
     return f'source {cfg["paths.unified_src"]}'
 
 
+def _resolve_flip_a2o(cfg, component):
+    """Return the a2o-direction setting for <component> ('ocn' or 'lnd').
+
+    False (the default) puts --a2o on the atm→component map, which is what
+    a component grid finer than the atmosphere grid needs.  True puts it on
+    the component→atm map instead, for a coarser component grid.
+    """
+    value = cfg.get(f'grid.{component}_flip_a2o_direction', False)
+    if isinstance(value, str):
+        return value.strip().lower() in ('true', 'yes', 'on', '1')
+    return bool(value)
+
+
 def _check_map(path):
     if not os.path.exists(path):
         raise RuntimeError(f'Failed to create map file: {path}')
@@ -86,6 +121,12 @@ def create_maps_ocn(cfg, algorithms=None):
     algorithms : list of str, optional
         Remap algorithms to use.  Defaults to maps.algorithms from
         project.yaml, or the built-in list if unset.
+
+    Notes
+    -----
+    --a2o goes on the atm→ocn map; set grid.ocn_flip_a2o_direction true to
+    move it to the ocn→atm map, which is what GenerateOverlapMesh needs
+    when the ocean grid is coarser than the atmosphere grid.
     """
     grid_name     = cfg['grid.name']
     atm_grid_name = cfg.get('grid.name_pg2', grid_name + 'pg2')
@@ -96,17 +137,21 @@ def create_maps_ocn(cfg, algorithms=None):
     timestamp     = cfg['project.timestamp']
     atm_grid_file = f'{cfg["derived.grid_root"]}/{atm_grid_name}_scrip.nc'
     env_prefix    = _unified_env_prefix(cfg)
+    flip_a2o      = _resolve_flip_a2o(cfg, 'ocn')
 
     with timer.time('create_maps_ocn'):
         print_line()
         print(f'\n  {clr.GREEN}Creating ocean map files with TempestRemap{clr.END}')
+        print(f'  {clr.GREEN}--a2o goes on the'
+              f' {"ocn->atm" if flip_a2o else "atm->ocn"} maps'
+              f' (grid.ocn_flip_a2o_direction = {flip_a2o}){clr.END}')
 
         algorithms = _resolve_algorithms(cfg, algorithms)
         for alg in algorithms:
             map_file = f'{maps_root}/map_{ocn_grid_name}_to_{atm_grid_name}_{alg}.{timestamp}.nc'
-            _ncremap_pair(env_prefix, alg, ocn_grid_file, atm_grid_file, map_file)
+            _ncremap_pair(env_prefix, alg, ocn_grid_file, atm_grid_file, map_file, a2o=flip_a2o)
             map_file = f'{maps_root}/map_{atm_grid_name}_to_{ocn_grid_name}_{alg}.{timestamp}.nc'
-            _ncremap_pair(env_prefix, alg, atm_grid_file, ocn_grid_file, map_file, a2o=True)
+            _ncremap_pair(env_prefix, alg, atm_grid_file, ocn_grid_file, map_file, a2o=not flip_a2o)
 
         print(f'\n  {clr.GREEN}Ocean map file creation SUCCESSFUL{clr.END}')
 
@@ -123,6 +168,13 @@ def create_maps_lnd(cfg, algorithms=None):
     algorithms : list of str, optional
         Remap algorithms to use.  Defaults to maps.algorithms from
         project.yaml, or the built-in list if unset.
+
+    Notes
+    -----
+    --a2o goes on the atm→lnd map; set grid.lnd_flip_a2o_direction true to
+    move it to the lnd→atm map, which is what GenerateOverlapMesh needs
+    when the land grid is coarser than the atmosphere grid (e.g. a pg2 land
+    grid paired with a more highly refined RRM atmosphere grid).
     """
     grid_name     = cfg['grid.name']
     atm_grid_name = cfg.get('grid.name_pg2', grid_name + 'pg2')
@@ -133,17 +185,21 @@ def create_maps_lnd(cfg, algorithms=None):
     timestamp     = cfg['project.timestamp']
     atm_grid_file = f'{cfg["derived.grid_root"]}/{atm_grid_name}_scrip.nc'
     env_prefix    = _unified_env_prefix(cfg)
+    flip_a2o      = _resolve_flip_a2o(cfg, 'lnd')
 
     with timer.time('create_maps_lnd'):
         print_line()
         print(f'\n  {clr.GREEN}Creating land map files with TempestRemap{clr.END}')
+        print(f'  {clr.GREEN}--a2o goes on the'
+              f' {"lnd->atm" if flip_a2o else "atm->lnd"} maps'
+              f' (grid.lnd_flip_a2o_direction = {flip_a2o}){clr.END}')
 
         algorithms = _resolve_algorithms(cfg, algorithms)
         for alg in algorithms:
             map_file = f'{maps_root}/map_{lnd_grid_name}_to_{atm_grid_name}_{alg}.{timestamp}.nc'
-            _ncremap_pair(env_prefix, alg, lnd_grid_file, atm_grid_file, map_file)
+            _ncremap_pair(env_prefix, alg, lnd_grid_file, atm_grid_file, map_file, a2o=flip_a2o)
             map_file = f'{maps_root}/map_{atm_grid_name}_to_{lnd_grid_name}_{alg}.{timestamp}.nc'
-            _ncremap_pair(env_prefix, alg, atm_grid_file, lnd_grid_file, map_file, a2o=True)
+            _ncremap_pair(env_prefix, alg, atm_grid_file, lnd_grid_file, map_file, a2o=not flip_a2o)
 
         print(f'\n  {clr.GREEN}Land map file creation SUCCESSFUL{clr.END}')
 
