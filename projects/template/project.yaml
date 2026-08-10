@@ -34,6 +34,18 @@ grid:
   spa_name: ""
   spa_file: ""
 
+  # Each component generates two maps, and exactly one of them carries the
+  # ncremap --a2o switch:
+  #   false -> --a2o on the atm→component map  (component grid finer than atm)
+  #   true  -> --a2o on the component→atm map  (component grid coarser than atm)
+  # Putting it on exactly one direction is what keeps the two grids in a
+  # consistent order for TempestRemap's GenerateOverlapMesh, which fails
+  # outright on the wrong order. Set the flip true for a component whose grid
+  # is coarser than the atm grid, e.g. an RRM atm grid over a coarser land
+  # grid — that case dies with a GenerateOverlapMesh error otherwise.
+  ocn_flip_a2o_direction: false
+  lnd_flip_a2o_direction: false
+
   # Set to true to use homme_tool grid_template_tool + HOMME2SCRIP.py for np4
   # SCRIP generation instead of the default pure-Python path.
   # Requires paths.homme_tool_root to be set.
