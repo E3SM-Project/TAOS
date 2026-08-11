@@ -209,6 +209,59 @@ mv /global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_domain/domain.lnd.conus-10
 
 --------------------------------------------------------------------------------
 
+# ROF map
+
+```shell
+
+
+# # OLCF - doesn't work because of MOAB/mpi/pmix issue
+# # export SLURM_MPI_TYPE=pmix # pmix isn't available
+# micromamba activate taos_env
+# GRID_ROOT=/lustre/orion/cli115/world-shared/e3sm/2026-INCITE-CONUS-RRM/files_grid
+# MAP_ROOT=/lustre/orion/cli115/world-shared/e3sm/2026-INCITE-CONUS-RRM/files_map
+
+# NERSC
+salloc --nodes 1 --qos interactive --time 6:00:00 --constraint cpu --account=e3sm
+conda activate taos_env
+GRID_ROOT=/global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_grid
+MAP_ROOT=/global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_map
+TMP_ROOT=/pscratch/sd/w/whannah/tmp_data
+
+LND_FILE=2026-incite-conus-1024x2-pg2_scrip.nc
+ROF_FILE=MOSART_global_8th.scrip.20180211c.nc
+
+cp ${GRID_ROOT}/${LND_FILE} ${TMP_ROOT}/${LND_FILE}
+cp ${DIN_LOC_ROOT}/lnd/clm2/mappingdata/grids/${ROF_FILE} ${TMP_ROOT}/${ROF_FILE}
+
+LND_GRID=${TMP_ROOT}/${LND_FILE}
+ROF_GRID=${TMP_ROOT}/${ROF_FILE}
+
+# ROF_FILE1=MOSART_global_8th.scrip.20180211c.nc
+# ROF_FILE2=MOSART_global_8th.scrip.20180211c.cdf5.nc
+# ncks -5 ${DIN_LOC_ROOT}/${ROF_FILE1} ${TMP_ROOT}/${ROF_FILE2}
+
+# MAP_FILE_LND2ROF=map_conus1024x2v1pg2_to_r0125_traave.20260810.nc
+# MAP_FILE_ROF2LND=map_r0125_to_conus1024x2v1pg2_traave.20260810.nc
+
+# time ncremap --mpi_nbr=16 -a traave --src_grd=${LND_GRID} --dst_grd=${ROF_GRID} --map_file=${TMP_ROOT}/${MAP_FILE_LND2ROF} --tmp_drc=${TMP_ROOT}
+
+MAP_FILE_LND2ROF=map_conus1024x2v1pg2_to_r0125_traave.20260810.nc
+
+time ncremap -a traave --src_grd=${LND_GRID} --dst_grd=${ROF_GRID} --map_file=${TMP_ROOT}/${MAP_FILE_LND2ROF} --tmp_drc=${TMP_ROOT}
+
+MAP_FILE_LND2ROF=map_conus1024x2v1pg2_to_r0125_esmfaave.20260810.nc
+
+time ncremap -a esmfaave --wgt_cmd='srun -n 32 ESMF_RegridWeightGen' --src_grd=${LND_GRID} --dst_grd=${ROF_GRID} --map_file=${TMP_ROOT}/${MAP_FILE_LND2ROF} --tmp_drc=${TMP_ROOT}
+
+# srun -n 8 ESMF_RegridWeightGen -s "/pscratch/sd/w/whannah/tmp_data/2026-incite-conus-1024x2-pg2_scrip.nc" -d "/pscratch/sd/w/whannah/tmp_data/MOSART_global_8th.scrip.20180211c.nc" -w "/pscratch/sd/w/whannah/tmp_data/map_conus1024x2v1pg2_to_r0125_esmfaave.20260810.nc" --method conserve --no_log --ignore_unmapped --ignore_degenerate
+
+cp ${TMP_ROOT}/${MAP_FILE_LND2ROF} ${MAP_ROOT}/${MAP_FILE_LND2ROF}
+
+```
+
+
+--------------------------------------------------------------------------------
+
 # E3SM Source Code Changes Needed to Define Grid
 
 > [!NOTE]
