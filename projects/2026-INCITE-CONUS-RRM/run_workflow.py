@@ -42,6 +42,8 @@ use_batch = True  # set False to run steps directly on the current node
 do_domain = True
 # do_topo   = True
 
+domain_map_file = '/global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_map/map_RRSwISC6to18E3r5_to_conus1024x4v1pg2_traave.20251121.nc'
+
 #-------------------------------------------------------------------------------
 # map generation — one batch job is submitted per (component, algorithm) pair,
 # so each job only has to fit a single map pair inside the 48h wall clock cap.
@@ -51,12 +53,12 @@ do_domain = True
 # map_components = ['spa']
 # map_components = ['lnd']
 # map_components = ['rof']
-map_components = ['ocn']
-# map_components = ['ocn','lnd','rof','spa']
+# map_components = ['ocn']
+map_components = ['ocn','lnd','spa']
 
 
-# map_algorithms = ['traave','trbilin','trfv2','trintbilin']
-map_algorithms = ['traave']
+map_algorithms = ['traave','trbilin','trfv2','trintbilin']
+# map_algorithms = ['traave']
 
 # per-component algorithm overrides — components not listed here use
 # map_algorithms above. The land↔river coupling only exchanges conservative
@@ -83,9 +85,9 @@ topo_args += ' --stage all'
 # or list specific grid names to process a subset
 
 # active_grids = None
-active_grids = ['2026-incite-conus-1024x2']
+# active_grids = ['2026-incite-conus-1024x2']
 # active_grids = ['2026-incite-conus-1024x3']
-# active_grids = ['2026-incite-conus-1024x4']
+active_grids = ['2026-incite-conus-1024x4']
 
 # smaller grid for testing
 # active_grids = ['2026-incite-conus-128x2'] 
@@ -112,12 +114,12 @@ active_grids = ['2026-incite-conus-1024x2']
 MAPS_SLURM_DEFAULT = '--nodes=1 --time=12:00:00'
 
 MAPS_SLURM = {
-    '2026-incite-conus-1024x2': '--nodes=1 --time=12:00:00',
+    '2026-incite-conus-1024x2': '--nodes=1 --time=24:00:00',
     '2026-incite-conus-1024x3': '--nodes=1 --time=48:00:00',
     '2026-incite-conus-1024x4': '--nodes=1 --time=48:00:00',
     # smaller grid for testing
-    '2026-incite-conus-128x2':  '--nodes=1 --time=12:00:00',
-    '2026-incite-conus-128x3':  '--nodes=1 --time=12:00:00',
+    '2026-incite-conus-128x2':  '--nodes=1 --time=24:00:00',
+    '2026-incite-conus-128x3':  '--nodes=1 --time=24:00:00',
 }
 
 # per-algorithm overrides, keyed by (grid_name, algorithm) - these win over
@@ -131,7 +133,7 @@ MAPS_SLURM_ALG = {
     # ('2026-incite-conus-1024x3','trbilin'): '--qos=shared --ntasks=1 --cpus-per-task=64 --time=48:00:00',
 }
 
-DOMAIN_SLURM = '--nodes=1 --time=12:00:00'
+DOMAIN_SLURM = '--nodes=1 --time=24:00:00'
 
 TOPO_SLURM = {
     '2026-incite-conus-1024x2': '--nodes=1 --time=12:00:00',
@@ -162,8 +164,20 @@ def submit(sbatch_prefix, job_name, slurm_opts, cmd, depends=None):
     full_cmd = (f'{sbatch_prefix} --parsable --job-name={job_name}'
                 f' {slurm_opts}{dep_opt} --wrap="{cmd}"')
     print(f'\n  {clr.GREEN}{full_cmd}{clr.END}')
-    result = sp.run(full_cmd, shell=True, check=True, text=True,
+    result = sp.run(full_cmd, shell=True, text=True,
                     capture_output=True, executable='/bin/bash')
+    if result.returncode != 0:
+        # stdout/stderr are captured so we can grab the job ID, so any sbatch
+        # error message (bad options, insufficient allocation, etc) has to be
+        # echoed explicitly or it would be silently swallowed
+        print(f'\n{clr.RED}ERROR: sbatch failed for job {job_name}'
+              f' (exit status {result.returncode}){clr.END}')
+        for stream, text in (('stderr', result.stderr), ('stdout', result.stdout)):
+            if text and text.strip():
+                print(f'  {stream}:')
+                for line in text.strip().split('\n'):
+                    print(f'    {line}')
+        exit(result.returncode)
     job_id = result.stdout.strip().split(';')[0]
     print(f'  => submitted job {job_id}')
     return job_id
@@ -229,6 +243,8 @@ for grid_cfg in cfg.iter_grids():
 
     if locals().get('do_domain', False):
         cmd = f'python -m taos.domain {yaml_path} --grid-name {grid_name}'
+        if 'domain_map_file' in locals() and domain_map_file is not None:
+            cmd += f' --map-file={domain_map_file}'
         submit(sbatch, f'gen_domain_{grid_name}', DOMAIN_SLURM, cmd,
                depends=map_job_ids)
 
