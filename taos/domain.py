@@ -11,6 +11,7 @@ Usage
 -----
     python -m taos.domain path/to/project.yaml
     python -m taos.domain path/to/project.yaml --create-domain-map
+    python -m taos.domain path/to/project.yaml --map-file path/to/map.nc
 """
 import os
 
@@ -30,7 +31,7 @@ def _unified_env_prefix(cfg):
 # public API
 
 
-def create_domain(cfg, create_domain_map=False):
+def create_domain(cfg, create_domain_map=False, map_file=None):
     """
     Generate E3SM domain files for the atmosphere grid.
 
@@ -40,6 +41,10 @@ def create_domain(cfg, create_domain_map=False):
     create_domain_map : bool
         If True, generate the ocean→atmosphere coupling map before creating
         the domain files. Requires that the grid files already exist.
+    map_file : str, optional
+        Explicit path to the ocean→atmosphere map file to use. If omitted,
+        the path is derived from the grid names and project timestamp. Useful
+        when an existing map file has a different date stamp than the project.
     """
     # -------------------------------------------------------------------
     # resolve paths
@@ -54,7 +59,8 @@ def create_domain(cfg, create_domain_map=False):
     timestamp     = cfg['project.timestamp']
     e3sm_src_root = cfg['paths.e3sm_src_root']
     atm_grid_file = f'{cfg["derived.grid_root"]}/{atm_grid_name}_scrip.nc'
-    map_file      = f'{maps_root}/map_{ocn_grid_name}_to_{atm_grid_name}_traave.{timestamp}.nc'
+    if map_file is None:
+        map_file  = f'{maps_root}/map_{ocn_grid_name}_to_{atm_grid_name}_traave.{timestamp}.nc'
     domn_tool     = f'{e3sm_src_root}/tools/generate_domain_files/generate_domain_files_E3SM.py'
     env_prefix    = _unified_env_prefix(cfg)
 
@@ -86,7 +92,8 @@ def create_domain(cfg, create_domain_map=False):
         if not os.path.exists(map_file):
             raise RuntimeError(
                 f'Map file does not exist: {map_file}\n'
-                f'Run with --create-domain-map or create it via taos.maps first.'
+                f'Run with --create-domain-map, specify one with --map-file,\n'
+                f'or create it via taos.maps first.'
             )
 
         # -------------------------------------------------------------------
@@ -116,6 +123,9 @@ if __name__ == '__main__':
                         help='Generate the ocean→atmosphere coupling map before creating domain files')
     parser.add_argument('--grid-name', default=None,
                         help='Grid name to process (selects from grids: list; default: base grid:)')
+    parser.add_argument('--map-file', default=None,
+                        help='Explicit ocean→atmosphere map file to use '
+                             '(default: derived from grid names and project timestamp)')
     args = parser.parse_args()
 
     cfg = taos_config(args.project_yaml)
@@ -123,5 +133,5 @@ if __name__ == '__main__':
         cfg = cfg.for_grid(args.grid_name)
     cfg.validate()
     timer.start_total()
-    create_domain(cfg, create_domain_map=args.create_domain_map)
+    create_domain(cfg, create_domain_map=args.create_domain_map, map_file=args.map_file)
     timer.summary()
