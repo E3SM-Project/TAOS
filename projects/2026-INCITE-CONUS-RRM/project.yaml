@@ -83,6 +83,9 @@ grids:
   - name: "2026-incite-conus-128x2"
     name_np4: "2026-incite-conus-128x2-np4"
     name_pg2: "2026-incite-conus-128x2-pg2"
+    rof_name: "r05"
+    rof_file: "${DIN_LOC_ROOT}/lnd/clm2/mappingdata/grids/SCRIPgrid_0.5x0.5_AVHRR_c110228.nc"
+    rof_flip_a2o_direction: true    # r0125 river grid coarser than land grid
 
   - name: "2026-incite-conus-128x3"
     name_np4: "2026-incite-conus-128x3-np4"
