@@ -28,14 +28,26 @@ grid:
   # Component grids — shared across all grids unless overridden in grids: list
   ocn_name: "RRSwISC6to18E3r5"
   ocn_file: "${DIN_LOC_ROOT}/share/meshes/mpas/ocean/ocean.RRSwISC6to18E3r5.mask.scrip.20240327.nc"
-  # lnd_name: "RRSwISC6to18E3r5"
-  # lnd_file: "${DIN_LOC_ROOT}/share/meshes/mpas/ocean/ocean.RRSwISC6to18E3r5.mask.scrip.20240327.nc"
   lnd_name: "2026-incite-conus-1024x2-pg2"
   lnd_file: "/global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_grid/2026-incite-conus-1024x2-pg2_scrip.nc"
 
   # SPA grid — optional, only needed for EAMxx SPA maps (defaults to <name>pg2)
-  spa_name: ""
-  spa_file: ""
+  spa_name: "ne30pg2"
+  spa_file: "${grid_root}/ne30pg2_scrip.nc"
+
+  # River grid — optional; river maps are generated only for the grid entry
+  # that sets rof_file, and pair the river grid with the land grid rather than
+  # the atm grid. All three target grids share the same 1024x2 land grid, so
+  # the river grid is set only on the 1024x2 entry below and the resulting
+  # lnd↔rof maps are reused by the others.
+
+  # Which of the two maps gets the ncremap --a2o switch. False (the default)
+  # puts it on the reference→component map (atm→ocn, atm→lnd, lnd→rof); true
+  # moves it to the component→reference map, which is what a component grid
+  # coarser than its reference grid needs — see the per-grid settings below.
+  # ocn_flip_a2o_direction: false
+  # lnd_flip_a2o_direction: false
+  # rof_flip_a2o_direction: false
 
   # Use homme_tool for np4 SCRIP generation (instead of pure-Python path)
   homme_np4_scrip:  true
@@ -43,18 +55,51 @@ grid:
   use_python_smooth: false
 
 grids:
-  - name: "2026-incite-conus-128x2"
-    name_np4: "2026-incite-conus-128x2-np4"
-    name_pg2: "2026-incite-conus-128x2-pg2"
+
   - name: "2026-incite-conus-1024x2"
     name_np4: "2026-incite-conus-1024x2-np4"
     name_pg2: "2026-incite-conus-1024x2-pg2"
+    # river grid lives here only — the 1024x3/1024x4 grids share this land
+    # grid, so they reuse these lnd↔rof maps instead of regenerating them
+    rof_name: "r0125"
+    rof_file: "${DIN_LOC_ROOT}/lnd/clm2/mappingdata/grids/MOSART_global_8th.scrip.20180211c.nc"
+    rof_flip_a2o_direction: true    # r0125 river grid coarser than land grid
+
   - name: "2026-incite-conus-1024x3"
     name_np4: "2026-incite-conus-1024x3-np4"
     name_pg2: "2026-incite-conus-1024x3-pg2"
+    lnd_name: "2026-incite-conus-1024x2-pg2"
+    lnd_file: "/global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_grid/2026-incite-conus-1024x2-pg2_scrip.nc"
+    lnd_flip_a2o_direction: true    # land grid coarser than atm grid
+
   - name: "2026-incite-conus-1024x4"
     name_np4: "2026-incite-conus-1024x4-np4"
     name_pg2: "2026-incite-conus-1024x4-pg2"
+    lnd_name: "2026-incite-conus-1024x2-pg2"
+    lnd_file: "/global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_grid/2026-incite-conus-1024x2-pg2_scrip.nc"
+    lnd_flip_a2o_direction: true    # land grid coarser than atm grid
+
+  # smaller grids based on ne128 for testing
+  - name: "2026-incite-conus-128x2"
+    name_np4: "2026-incite-conus-128x2-np4"
+    name_pg2: "2026-incite-conus-128x2-pg2"
+    rof_name: "r05"
+    rof_file: "${DIN_LOC_ROOT}/lnd/clm2/mappingdata/grids/SCRIPgrid_0.5x0.5_AVHRR_c110228.nc"
+    rof_flip_a2o_direction: true    # r0125 river grid coarser than land grid
+
+  - name: "2026-incite-conus-128x3"
+    name_np4: "2026-incite-conus-128x3-np4"
+    name_pg2: "2026-incite-conus-128x3-pg2"
+    lnd_name: "2026-incite-conus-128x2-pg2"
+    lnd_file: "/global/cfs/cdirs/e3sm/2026-INCITE-CONUS-RRM/files_grid/2026-incite-conus-128x2-pg2_scrip.nc"
+    lnd_flip_a2o_direction: true    # land grid coarser than atm grid
+
+
+  # # should we use shorter names? (Ben thinks so)
+  # - name: "conus128x2v1"
+  # - name: "conus1024x2v1"
+  # - name: "conus1024x3v1"
+  # - name: "conus1024x4v1"
 
 # --- Machine override (optional) ---------------------------------------------
 # Set name only if auto-detection fails or you need to force a specific machine.
@@ -69,7 +114,7 @@ machine:
 paths:
   grid_code_root:  ""
   grid_data_root:  "/global/cfs/cdirs/e3sm"
-  e3sm_src_root:   ""
+  e3sm_src_root:   "/pscratch/sd/w/whannah/tmp_e3sm_src"
   DIN_LOC_ROOT:    ""
   unified_bin:     ""
   unified_src:     ""
